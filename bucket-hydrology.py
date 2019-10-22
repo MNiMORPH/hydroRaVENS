@@ -2,6 +2,11 @@
 
 # Started by A. Wickert
 # 25 July 2019
+# Updated by J. Jones
+# Starting 08 Oct 2019
+
+import numpy as np
+from matplotlib import pyplot as plt
 
 class reservoir(object):
     """
@@ -12,12 +17,20 @@ class reservoir(object):
 
     import numpy as np
 
-    def __init__(self, t, Vmax=np.inf):
+    def __init__(self, t_efold, f_to_discharge=1., Vmax=np.inf):
+        """
+        t_efold: e-folding time for reservoir depletion
+        f_to_discharge: fraction of the water lost during that e-folding time
+                        that exfiltrates to river discharge (as opposed to 
+                        entering one or more other reservoirs)
+        Vmax: Maximum water volume that can be held
+        """
         self.Vwater = 0.
         self.Vmax = Vmax
-        self.t_efold = t
+        self.t_efold = t_efold
         self.excess = 0.
         self.Vout = np.nan
+        self.f_to_discharge = f_to_discharge
     
     def recharge(self, V):
         if self.Vwater+V <= self.Vmax:
@@ -34,9 +47,21 @@ class reservoir(object):
         self.Vwater -= dV
         self.excess = 0.
 
+class buckets(object):
+    """
+    Incorportates a list of reservoirs into a linear hierarchy that sends water 
+    either downwards our out to the surface.
+    
+    Input: reservoir list, in order from top to bottom
+    (surface to deep groundwater)
+    """
+
+    def __init__(self, reservoir_list):
+        self.reservoirs = reservoir_list
+
+
 
 # Program below the class
-
 import numpy as np
 from numpy.random import poisson
 from matplotlib import pyplot as plt
@@ -49,16 +74,8 @@ dt = 1. # day
 
 # Change these parameters with an input file or script, eventually
 # Arbitrary units; will be made real in an actual landscape
-res_tile = reservoir(0.1, 0.)
-res_surface = reservoir(1., 10.)
-res_deep = reservoir(10., np.inf)
-
-# Change this parameter with a script as well
-f_tile = 0.4 # fraction of land surface covered in drain tile
-
-# Partitioning -- thse should also be external parameters
-f_tile_to_discharge = 0.9
-f_surface_to_discharge = 0.5
+res_surface = reservoir(t_efold=1., f_to_discharge=0.5, Vmax=10.)
+res_deep = reservoir(t_efold=10., f_to_discharge=1., Vmax=np.inf)
 
 
 Q = []
@@ -68,12 +85,11 @@ Q = []
 for ti in range(len(rain)):
     Qi = 0.
     # Tile 
-    res_tile.recharge(f_tile * rain[ti])
+    res_tile.recharge(rain[ti])
     res_tile.discharge(dt)
-    Qi += f_tile_to_discharge * res_tile.Vout
+    Qi += res_tile.Vout
     # Surface
-    res_surface.recharge( (1.-f_tile) * rain[ti] + 
-                          (1. - f_tile_to_discharge) * res_tile.Vout )
+    res_surface.recharge( rain[ti] )
     res_surface.discharge(dt)
     Qi += f_surface_to_discharge * res_surface.Vout
     # Deep
