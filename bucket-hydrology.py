@@ -43,7 +43,8 @@ class reservoir(object):
 
     def discharge(self, dt):
         dV = self.Vwater * (1 - np.exp(-dt/self.t_efold))
-        self.Vout = dV + self.excess
+        self.V_exfiltrated = self.excess + dV * self.f_to_discharge
+        self.V_infiltrated = dV * (1 - self.f_to_discharge)
         self.Vwater -= dV
         self.excess = 0.
 
@@ -58,7 +59,47 @@ class buckets(object):
 
     def __init__(self, reservoir_list):
         self.reservoirs = reservoir_list
-
+        self.rain = None
+        self.Q = [] # discharge
+    
+    def set_rainfall_time_series(self, rain):
+        self.rain = rain
+    
+    def initialize(self):
+        """
+        Part of CSDMS BMI
+        Initialization handled in __init__
+        Nothing more to do
+        """
+        pass
+    
+    def update(self, rain_at_timestep):
+        """
+        Updates water flow for one time step (typically a day)
+        
+        NOTE FALLACY: recharging before discharging,
+        even though during the same day
+        consider changing to use half-recharge from each day
+        """
+        # Top layer is special: interacts with atmosphere
+        self.reservoirs[0].recharge(self.rain[ti])
+        self.reservoirs[0].discharge()
+        Qi += self.reservoirs[0].V_exfiltrated
+        for i in range(1, len(self.reservoirs)):
+            self.reservoirs[i].recharge(res[i-1].V_infiltrated)
+            self.reservoirs[i].discharge()
+        return Qi
+    
+    def run(self, rain=None):
+        if rain:
+            if self.rain:
+                print "Warning: overwriting existing rainfall time series"
+            self.set_rainfall_time_series(rain)
+        if self.rain is None:
+            sys.exit("Please set the rainfall time series")
+        for ti in range(len(self.rain)):
+            Qi = self.update()
+            self.Q.append(Qi)
 
 
 # Program below the class
@@ -77,6 +118,9 @@ dt = 1. # day
 res_surface = reservoir(t_efold=1., f_to_discharge=0.5, Vmax=10.)
 res_deep = reservoir(t_efold=10., f_to_discharge=1., Vmax=np.inf)
 
+strat_column = [res_surface, res_deep]
+
+watershed = buckets(strat_column)
 
 Q = []
 # This includes made-up rules about how much of the discharge from each
