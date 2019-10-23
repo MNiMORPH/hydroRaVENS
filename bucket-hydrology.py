@@ -18,35 +18,35 @@ class reservoir(object):
 
     import numpy as np
 
-    def __init__(self, t_efold, f_to_discharge=1., Vmax=np.inf):
+    def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf):
         """
         t_efold: e-folding time for reservoir depletion
         f_to_discharge: fraction of the water lost during that e-folding time
                         that exfiltrates to river discharge (as opposed to 
                         entering one or more other reservoirs)
-        Vmax: Maximum water volume that can be held
+        Hmax: Maximum water volume that can be held
         """
-        self.Vwater = 0.
-        self.Vmax = Vmax
+        self.Hwater = 0.
+        self.Hmax = Hmax
         self.t_efold = t_efold
         self.excess = 0.
-        self.Vout = np.nan
+        self.Hout = np.nan
         self.f_to_discharge = f_to_discharge
     
-    def recharge(self, V):
-        if self.Vwater+V <= self.Vmax:
+    def recharge(self, H):
+        if self.Hwater+H <= self.Hmax:
             excess = 0.
-            self.Vwater += V
-        if self.Vwater+V > self.Vmax:
-            excess = self.Vwater+V - self.Vmax
-            self.Vwater = self.Vmax
+            self.Hwater += H
+        if self.Hwater+H > self.Hmax:
+            excess = self.Hwater+H - self.Hmax
+            self.Hwater = self.Hmax
         self.excess += excess
 
     def discharge(self, dt):
-        dV = self.Vwater * (1 - np.exp(-dt/self.t_efold))
-        self.V_exfiltrated = self.excess + dV * self.f_to_discharge
-        self.V_infiltrated = dV * (1 - self.f_to_discharge)
-        self.Vwater -= dV
+        dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
+        self.H_exfiltrated = self.excess + dH * self.f_to_discharge
+        self.H_infiltrated = dH * (1 - self.f_to_discharge)
+        self.Hwater -= dH
         self.excess = 0.
 
 class buckets(object):
@@ -88,11 +88,11 @@ class buckets(object):
         # Top layer is special: interacts with atmosphere
         self.reservoirs[0].recharge(rain_at_timestep)
         self.reservoirs[0].discharge(self.dt)
-        Qi = self.reservoirs[0].V_exfiltrated
+        Qi = self.reservoirs[0].H_exfiltrated
         for i in range(1, len(self.reservoirs)):
-            self.reservoirs[i].recharge(self.reservoirs[i-1].V_infiltrated)
+            self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
             self.reservoirs[i].discharge(self.dt)
-            Qi += self.reservoirs[i].V_exfiltrated
+            Qi += self.reservoirs[i].H_exfiltrated
         return Qi
     
     def run(self, rain=None):
@@ -105,6 +105,15 @@ class buckets(object):
         for rain_ti in self.rain:
             Qi = self.update(rain_ti)
             self.Q.append(Qi)
+
+    def plot(self):
+        plt.figure()
+        plt.plot(watershed.rain, 'g', label='rainfall')
+        plt.plot(watershed.Q, 'b', label='discharge')
+        plt.legend(fontsize=11)
+        plt.ylabel('Rainfall or discharge [units arbitrary]', fontsize=14)
+        plt.xlabel('Time [days]', fontsize=14)
+        plt.show()
 
 
 # Program below the class
@@ -120,20 +129,12 @@ dt = 1. # day
 
 # Change these parameters with an input file or script, eventually
 # Arbitrary units; will be made real in an actual landscape
-res_surface = reservoir(t_efold=1., f_to_discharge=0.5, Vmax=10.)
-res_deep = reservoir(t_efold=10., f_to_discharge=1., Vmax=np.inf)
+res_surface = reservoir(t_efold=1., f_to_discharge=0.5, Hmax=10.)
+res_deep = reservoir(t_efold=10., f_to_discharge=1., Hmax=np.inf)
 
 strat_column = [res_surface, res_deep]
 watershed = buckets(reservoir_list=strat_column, dt=dt)
 
 watershed.run(rain)
 
-plt.figure()
-plt.plot(watershed.rain, 'g', label='rainfall')
-plt.plot(watershed.Q, 'b', label='discharge')
-plt.legend(fontsize=11)
-plt.ylabel('Rainfall or discharge [units arbitrary]', fontsize=14)
-plt.xlabel('Time [units arbitrary]', fontsize=14)
-#plt.savefig('TDF-'+'%.1f' %f_tile+'.png')
-plt.show()
 
