@@ -102,16 +102,19 @@ class buckets(object):
             self.set_rainfall_time_series(rain)
         if self.rain is None:
             sys.exit("Please set the rainfall time series")
+        self.time = np.arange(len(self.rain)) * self.dt
         for rain_ti in self.rain:
             Qi = self.update(rain_ti)
             self.Q.append(Qi)
 
     def plot(self):
         plt.figure()
-        plt.plot(watershed.rain, 'g', label='rainfall')
-        plt.plot(watershed.Q, 'b', label='discharge')
+        plt.bar(left=self.time, height=np.array(self.rain)/self.dt, width=1.,
+                align='center', label='Rainfall', linewidth=0, alpha=0.5)
+        plt.plot(self.time, np.array(self.Q)/self.dt, 'k',
+                label='Unit discharge', linewidth=2)
         plt.legend(fontsize=11)
-        plt.ylabel('Rainfall or discharge [units arbitrary]', fontsize=14)
+        plt.ylabel('[mm/day]', fontsize=14)
         plt.xlabel('Time [days]', fontsize=14)
         plt.show()
 
@@ -123,18 +126,15 @@ from matplotlib import pyplot as plt
 #plt.ion()
 
 rain = poisson(.2, 100) # Convert to an import for real data
-
 dt = 1. # day
         
-
 # Change these parameters with an input file or script, eventually
 # Arbitrary units; will be made real in an actual landscape
 res_surface = reservoir(t_efold=1., f_to_discharge=0.5, Hmax=10.)
 res_deep = reservoir(t_efold=10., f_to_discharge=1., Hmax=np.inf)
 
 strat_column = [res_surface, res_deep]
+
 watershed = buckets(reservoir_list=strat_column, dt=dt)
-
 watershed.run(rain)
-
-
+watershed.plot()
