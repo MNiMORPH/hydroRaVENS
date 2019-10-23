@@ -7,6 +7,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
+import sys
 
 class reservoir(object):
     """
@@ -53,12 +54,15 @@ class buckets(object):
     Incorportates a list of reservoirs into a linear hierarchy that sends water 
     either downwards our out to the surface.
     
-    Input: reservoir list, in order from top to bottom
-    (surface to deep groundwater)
+    reservoir_list: list of subsurface layers in order from top to bottom
+                    (surface to deep groundwater)
+    dt: time step (typically in days)
+    
     """
 
-    def __init__(self, reservoir_list):
+    def __init__(self, reservoir_list, dt=1):
         self.reservoirs = reservoir_list
+        self.dt = dt
         self.rain = None
         self.Q = [] # discharge
     
@@ -78,27 +82,28 @@ class buckets(object):
         Updates water flow for one time step (typically a day)
         
         NOTE FALLACY: recharging before discharging,
-        even though during the same day
-        consider changing to use half-recharge from each day
+        even though during the same time step
+        consider changing to use half-recharge from each time step
         """
         # Top layer is special: interacts with atmosphere
-        self.reservoirs[0].recharge(self.rain[ti])
-        self.reservoirs[0].discharge()
-        Qi += self.reservoirs[0].V_exfiltrated
+        self.reservoirs[0].recharge(rain_at_timestep)
+        self.reservoirs[0].discharge(self.dt)
+        Qi = self.reservoirs[0].V_exfiltrated
         for i in range(1, len(self.reservoirs)):
-            self.reservoirs[i].recharge(res[i-1].V_infiltrated)
-            self.reservoirs[i].discharge()
+            self.reservoirs[i].recharge(self.reservoirs[i-1].V_infiltrated)
+            self.reservoirs[i].discharge(self.dt)
+            Qi += self.reservoirs[i].V_exfiltrated
         return Qi
     
     def run(self, rain=None):
-        if rain:
-            if self.rain:
+        if rain is not None:
+            if self.rain is not None:
                 print "Warning: overwriting existing rainfall time series"
             self.set_rainfall_time_series(rain)
         if self.rain is None:
             sys.exit("Please set the rainfall time series")
-        for ti in range(len(self.rain)):
-            Qi = self.update()
+        for rain_ti in self.rain:
+            Qi = self.update(rain_ti)
             self.Q.append(Qi)
 
 
@@ -119,36 +124,14 @@ res_surface = reservoir(t_efold=1., f_to_discharge=0.5, Vmax=10.)
 res_deep = reservoir(t_efold=10., f_to_discharge=1., Vmax=np.inf)
 
 strat_column = [res_surface, res_deep]
+watershed = buckets(reservoir_list=strat_column, dt=dt)
 
-watershed = buckets(strat_column)
-
-Q = []
-# This includes made-up rules about how much of the discharge from each
-# bucket goes to the other buckets or to the discharge at the outlet.
-# I also use arbitarry units
-for ti in range(len(rain)):
-    Qi = 0.
-    # Tile 
-    res_tile.recharge(rain[ti])
-    res_tile.discharge(dt)
-    Qi += res_tile.Vout
-    # Surface
-    res_surface.recharge( rain[ti] )
-    res_surface.discharge(dt)
-    Qi += f_surface_to_discharge * res_surface.Vout
-    # Deep
-    res_deep.recharge( (1. - f_surface_to_discharge) * res_surface.Vout )
-    res_deep.discharge(dt)
-    Qi += res_deep.Vout
-    # time series
-    Q.append(Qi)
-    Qi = 0
+watershed.run(rain)
 
 plt.figure()
-plt.plot(rain, 'g', label='rainfall')
-plt.plot(Q, 'b', label='discharge')
+plt.plot(watershed.rain, 'g', label='rainfall')
+plt.plot(watershed.Q, 'b', label='discharge')
 plt.legend(fontsize=11)
-plt.title('Tile-drained fraction: '+'%.1f' %f_tile)
 plt.ylabel('Rainfall or discharge [units arbitrary]', fontsize=14)
 plt.xlabel('Time [units arbitrary]', fontsize=14)
 #plt.savefig('TDF-'+'%.1f' %f_tile+'.png')
