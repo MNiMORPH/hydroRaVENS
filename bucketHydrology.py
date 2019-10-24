@@ -106,15 +106,28 @@ class buckets(object):
         for rain_ti in self.rain:
             Qi = self.update(rain_ti)
             self.Q.append(Qi)
+        self.rain = np.array(self.rain)
+        self.Q = np.array(self.Q)
 
     def plot(self):
         plt.figure()
-        plt.bar(left=self.time, height=np.array(self.rain)/self.dt, width=1.,
+        plt.bar(left=self.time, height=self.rain/self.dt, width=1.,
                 align='center', label='Rainfall', linewidth=0, alpha=0.5)
-        plt.plot(self.time, np.array(self.Q)/self.dt, 'k',
+        plt.plot(self.time, self.Q/self.dt, 'k',
                 label='Unit discharge', linewidth=2)
         plt.legend(fontsize=11)
         plt.ylabel('[mm/day]', fontsize=14)
         plt.xlabel('Time [days]', fontsize=14)
         plt.show()
 
+    def computeNashSutcliffeEfficiency(self, Qdata):
+        """
+        Compute the NSE of the model outputs vs. a set of supplied data
+        """
+        _realvalue = np.isfinite(self.Q * Qdata)
+        NSE_num = np.sum( (self.Q[_realvalue] - Qdata[_realvalue])**2 )
+        NSE_denom = np.sum((Qdata[_realvalue] - np.mean(Qdata[_realvalue]))**2)
+        if np.sum(1 - _realvalue):
+            print "Calculated with ", np.sum(1 - _realvalue), "no-data points"
+        self.NSE = NSE_num / NSE_denom
+        
