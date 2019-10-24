@@ -20,7 +20,8 @@ class reservoir(object):
 
     def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf):
         """
-        t_efold: e-folding time for reservoir depletion
+        t_efold: e-folding time for reservoir depletion (same units as time 
+                 steps; typically days)
         f_to_discharge: fraction of the water lost during that e-folding time
                         that exfiltrates to river discharge (as opposed to 
                         entering one or more other reservoirs)
@@ -109,10 +110,17 @@ class buckets(object):
         self.rain = np.array(self.rain)
         self.Q = np.array(self.Q)
 
-    def plot(self):
+    def plot(self, Qdata=None):
+        """
+        Plot rainfall and discharge.
+        Optionally pass specific discharge data to plot this as well.
+        """
         plt.figure()
         plt.bar(left=self.time, height=self.rain/self.dt, width=1.,
                 align='center', label='Rainfall', linewidth=0, alpha=0.5)
+        if Qdata is not None:
+            plt.plot(self.time, Qdata/self.dt, 'b',
+                    label='Unit discharge data', linewidth=2)
         plt.plot(self.time, self.Q/self.dt, 'k',
                 label='Unit discharge', linewidth=2)
         plt.legend(fontsize=11)
