@@ -137,5 +137,5 @@ class buckets(object):
         NSE_denom = np.sum((Qdata[_realvalue] - np.mean(Qdata[_realvalue]))**2)
         if np.sum(1 - _realvalue):
             print "Calculated with ", np.sum(1 - _realvalue), "no-data points"
-        self.NSE = NSE_num / NSE_denom
+        self.NSE = 1 - NSE_num / NSE_denom
         
