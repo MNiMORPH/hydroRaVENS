@@ -76,7 +76,8 @@ class buckets(object):
         Initialization handled in __init__
         Nothing more to do
         """
-        pass
+        I = 41.47044637
+        a_i = 6.75E-7*I**3 - 7.72E-5*I**2 + 1.7912E-2*I + 0.49239
     
     def update(self, rain_at_timestep):
         """
@@ -96,6 +97,21 @@ class buckets(object):
             Qi += self.reservoirs[i].H_exfiltrated
         return Qi
     
+    def evapotranspirationChang2019(self, Tmax, Tmin, photoperiod):
+        """
+        Modified daily Thorntwaite Equation
+        """
+        
+        T_eff = 0.5 * 0.69 * (3*Tmax - Tmin)
+        C = photoperiod/360.
+
+        if T_eff_i >= 26:
+            ET_i = C*(-415.85 + 32.24*T_eff_i - 0.43*T_eff_i**2)
+        elif 0< T_eff_i< 26:
+            ET_i = 16*C*(10*T_eff_i/I)**a_i
+        else:
+            ET_i = 0.
+
     def run(self, rain=None):
         if rain is not None:
             if self.rain is not None:
