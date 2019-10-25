@@ -132,7 +132,7 @@ class buckets(object):
         Optionally pass specific discharge data to plot this as well.
         """
         plt.figure()
-        plt.bar(left=self.time, height=self.rain/self.dt, width=1.,
+        plt.bar(x=self.time, height=self.rain/self.dt, width=1.,
                 align='center', label='Rainfall', linewidth=0, alpha=0.5)
         if Qdata is not None:
             plt.plot(self.time, Qdata/self.dt, 'b',
