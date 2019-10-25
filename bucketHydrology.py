@@ -35,10 +35,17 @@ class reservoir(object):
         self.f_to_discharge = f_to_discharge
     
     def recharge(self, H):
-        if self.Hwater+H <= self.Hmax:
-            excess = 0.
+        """
+        Recharge can be positive (precipitation) or negative
+        (evapotranspiration)
+        """
+        excess = 0.
+        if self.Hwater < 0:
+            # Allowing ET in top layer only.
+            self.Hwater = 0
+        elif self.Hwater+H <= self.Hmax:
             self.Hwater += H
-        if self.Hwater+H > self.Hmax:
+        elif self.Hwater+H > self.Hmax:
             excess = self.Hwater+H - self.Hmax
             self.Hwater = self.Hmax
         self.excess += excess
@@ -65,7 +72,14 @@ class buckets(object):
         self.reservoirs = reservoir_list
         self.dt = dt
         self.rain = None
+        self.ET = None
         self.Q = [] # discharge
+        # Evapotranspiration
+        self.Chang_I = 41.47044637
+        self.Chang_a_i = 6.75E-7*self.Chang_I**3 \
+                         - 7.72E-5*self.Chang_I**2 \
+                         + 1.7912E-2*self.Chang_I \
+                         + 0.49239
     
     def set_rainfall_time_series(self, rain):
         self.rain = rain
@@ -76,10 +90,8 @@ class buckets(object):
         Initialization handled in __init__
         Nothing more to do
         """
-        I = 41.47044637
-        a_i = 6.75E-7*I**3 - 7.72E-5*I**2 + 1.7912E-2*I + 0.49239
     
-    def update(self, rain_at_timestep):
+    def update(self, rain_at_timestep, ET_at_timestep=0.):
         """
         Updates water flow for one time step (typically a day)
         
@@ -88,7 +100,8 @@ class buckets(object):
         consider changing to use half-recharge from each time step
         """
         # Top layer is special: interacts with atmosphere
-        self.reservoirs[0].recharge(rain_at_timestep)
+        recharge_at_timestep = rain_at_timestep - ET_at_timestep
+        self.reservoirs[0].recharge(recharge_at_timestep)
         self.reservoirs[0].discharge(self.dt)
         Qi = self.reservoirs[0].H_exfiltrated
         for i in range(1, len(self.reservoirs)):
@@ -102,27 +115,33 @@ class buckets(object):
         Modified daily Thorntwaite Equation
         """
         
-        T_eff = 0.5 * 0.69 * (3*Tmax - Tmin)
+        Teff = 0.5 * 0.69 * (3*Tmax - Tmin)
         C = photoperiod/360.
 
-        if T_eff_i >= 26:
-            ET_i = C*(-415.85 + 32.24*T_eff_i - 0.43*T_eff_i**2)
-        elif 0< T_eff_i< 26:
-            ET_i = 16*C*(10*T_eff_i/I)**a_i
-        else:
-            ET_i = 0.
+        # Simple and inefficient logical implementation
+        # Is this ET or PET?
+        # I will add/subtract from the top reservoir only.
+        self.ET = C*(-415.85 + 32.24*Teff - 0.43*Teff**2) * (Teff >= 26) \
+                   + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
+                     * (Teff > 0) * (Teff < 26)
 
-    def run(self, rain=None):
+    def run(self, rain=None, ET=False):
         if rain is not None:
             if self.rain is not None:
-                print "Warning: overwriting existing rainfall time series"
+                print "Warning: overwriting existing rainfall time series."
             self.set_rainfall_time_series(rain)
         if self.rain is None:
             sys.exit("Please set the rainfall time series")
         self.time = np.arange(len(self.rain)) * self.dt
-        for rain_ti in self.rain:
-            Qi = self.update(rain_ti)
-            self.Q.append(Qi)
+        if ET:
+            for ti in range(len(self.rain)):
+                Qi = self.update(rain[ti], self.ET[ti])
+                self.Q.append(Qi)
+        else:
+            print "Warning: neglecting evapotranspiration."
+            for ti in range(len(self.rain)):
+                Qi = self.update(rain[ti])
+                self.Q.append(Qi)
         self.rain = np.array(self.rain)
         self.Q = np.array(self.Q)
 
