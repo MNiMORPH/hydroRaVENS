@@ -84,12 +84,26 @@ class buckets(object):
     def set_rainfall_time_series(self, rain):
         self.rain = rain
     
-    def initialize(self):
+    def export_Hlist(self):
+        """
+        Export the list of water depths, for reinitialization
+        (e.g., to start after a spin-up phase or to restart a paused model run)
+        """
+        Hlist = []
+        for reservoir in self.reservoirs:
+            Hlist.append( reservoir.Hwater )
+        return Hlist
+    
+    def initialize(self, Hlist=None):
         """
         Part of CSDMS BMI
-        Initialization handled in __init__
-        Nothing more to do
+        Can use this to initialize from an old run or a spin-up
         """
+        if Hlist is not None:
+            i = 0
+            for reservoir in self.reservoirs:
+                reservoir.Hwater = Hlist[i]
+                i += 1
     
     def update(self, rain_at_timestep, ET_at_timestep=0.):
         """
