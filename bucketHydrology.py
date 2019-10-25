@@ -150,9 +150,10 @@ class buckets(object):
         Plot rainfall and discharge.
         Optionally pass specific discharge data to plot this as well.
         """
-        plt.figure()
+        fig = plt.figure()
         plt.bar(x=self.time, height=self.rain/self.dt, width=1.,
                 align='center', label='Rainfall', linewidth=0, alpha=0.5)
+        plt.twinx()
         if Qdata is not None:
             plt.plot(self.time, Qdata/self.dt, 'b',
                     label='Unit discharge data', linewidth=2)
