@@ -139,6 +139,12 @@ class buckets(object):
                    + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
                      * (Teff > 0) * (Teff < 26)
 
+    def set_evapotranspiration(self, ET):
+        """
+        User provides ET time series
+        """
+        self.ET = ET
+
     def run(self, rain=None, ET=False):
         if rain is not None:
             if self.rain is not None:
