@@ -73,7 +73,6 @@ class buckets(object):
         self.dt = dt
         self.rain = None
         self.ET = None
-        self.Q = [] # discharge
         # Evapotranspiration
         self.Chang_I = 41.47044637
         self.Chang_a_i = 6.75E-7*self.Chang_I**3 \
@@ -146,6 +145,7 @@ class buckets(object):
         self.ET = ET
 
     def run(self, rain=None, ET=False):
+        self.Q = [] # discharge
         if rain is not None:
             if self.rain is not None:
                 print "Warning: overwriting existing rainfall time series."
@@ -171,17 +171,20 @@ class buckets(object):
         Optionally pass specific discharge data to plot this as well.
         """
         fig = plt.figure()
-        plt.bar(x=self.time, height=self.rain/self.dt, width=1.,
-                align='center', label='Rainfall', linewidth=0, alpha=0.5)
+        plt.xlabel('Time [days]', fontsize=14)
+        plt.ylabel('[mm/day]', fontsize=14)
+        plt.bar(self.time, height=self.rain/self.dt, width=1., align='center', label='Rainfall', linewidth=0, alpha=0.5)
+        #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
         plt.twinx()
         if Qdata is not None:
             plt.plot(self.time, Qdata/self.dt, 'b',
                     label='Unit discharge data', linewidth=2)
         plt.plot(self.time, self.Q/self.dt, 'k',
-                label='Unit discharge', linewidth=2)
+                label='Unit discharge model', linewidth=2)
+        plt.ylim(0, plt.ylim()[-1])
         plt.legend(fontsize=11)
         plt.ylabel('[mm/day]', fontsize=14)
-        plt.xlabel('Time [days]', fontsize=14)
+        plt.tight_layout()
         plt.show()
 
     def computeNashSutcliffeEfficiency(self, Qdata):
