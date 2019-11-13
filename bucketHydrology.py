@@ -81,7 +81,7 @@ class buckets(object):
                          + 0.49239
     
     def set_rainfall_time_series(self, rain):
-        self.rain = rain
+        self.rain = np.array(rain)
     
     def export_Hlist(self):
         """
@@ -142,7 +142,7 @@ class buckets(object):
         """
         User provides ET time series
         """
-        self.ET = ET
+        self.ET = np.array(ET)
 
     def run(self, rain=None, ET=False):
         self.Q = [] # discharge
@@ -162,7 +162,6 @@ class buckets(object):
             for ti in range(len(self.rain)):
                 Qi = self.update(rain[ti])
                 self.Q.append(Qi)
-        self.rain = np.array(self.rain)
         self.Q = np.array(self.Q)
 
     def plot(self, Qdata=None):
