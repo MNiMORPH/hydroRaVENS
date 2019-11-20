@@ -148,7 +148,7 @@ class buckets(object):
         self.Q = [] # discharge
         if rain is not None:
             if self.rain is not None:
-                print "Warning: overwriting existing rainfall time series."
+                print("Warning: overwriting existing rainfall time series.")
             self.set_rainfall_time_series(rain)
         if self.rain is None:
             sys.exit("Please set the rainfall time series")
@@ -158,7 +158,7 @@ class buckets(object):
                 Qi = self.update(rain[ti], self.ET[ti])
                 self.Q.append(Qi)
         else:
-            print "Warning: neglecting evapotranspiration."
+            print("Warning: neglecting evapotranspiration.")
             for ti in range(len(self.rain)):
                 Qi = self.update(rain[ti])
                 self.Q.append(Qi)
@@ -194,6 +194,6 @@ class buckets(object):
         NSE_num = np.sum( (self.Q[_realvalue] - Qdata[_realvalue])**2 )
         NSE_denom = np.sum((Qdata[_realvalue] - np.mean(Qdata[_realvalue]))**2)
         if np.sum(1 - _realvalue):
-            print "Calculated with ", np.sum(1 - _realvalue), "no-data points"
+            print("Calculated with ", np.sum(1 - _realvalue), "no-data points")
         self.NSE = 1 - NSE_num / NSE_denom
         

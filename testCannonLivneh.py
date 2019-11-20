@@ -51,9 +51,9 @@ watershed.run(rain=np.array(t_P_ET['Precipitation [mm/day]']), ET=True)
 
 # Finalize
 watershed.computeNashSutcliffeEfficiency(Q_measured['Q_mm'])
-print "NSE:", watershed.NSE
+print("NSE:", watershed.NSE)
 Hout = watershed.export_Hlist()
-print Hout
+print(Hout)
 #watershed.plot()
 watershed.plot(Q_measured['Q_mm'])
 
