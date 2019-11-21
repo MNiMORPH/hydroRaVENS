@@ -7,6 +7,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.dates as mdates
 import sys
 
 class reservoir(object):
@@ -64,13 +65,11 @@ class buckets(object):
     
     reservoir_list: list of subsurface layers in order from top to bottom
                     (surface to deep groundwater)
-    dt: time step (typically in days)
     
     """
 
-    def __init__(self, reservoir_list, dt=1):
+    def __init__(self, reservoir_list):
         self.reservoirs = reservoir_list
-        self.dt = dt
         self.rain = None
         self.ET = None
         # Evapotranspiration
@@ -93,16 +92,51 @@ class buckets(object):
             Hlist.append( reservoir.Hwater )
         return Hlist
     
-    def initialize(self, Hlist=None):
+    def initialize(self, dateTimes, Hlist=None):
         """
         Part of CSDMS BMI
         Can use this to initialize from an old run or a spin-up
+        
+        dateTimes: A list/array/etc. of python DateTime objects that go along
+                   with the time series of precipitation.
+                   IF A FUTURE CAPABILITY FOR NONUNIFORM DATA IS ENACTED
+                   The calculation will be exclusive of the outer two data 
+                   points in this series in order to calculate a time step,
+                   *unless* a specific dt is indicated
+                   FOR FUTURE: dt: Time step [days]; , dt=None
+        Hlist: A list of water depths, in the same order as the reservoirs
+               (top to bottom) that can be used to set initial water depths.
+               This can be helpful for initial conditions or to return from a
+               spin up.
         """
+        self.time = np.array(dateTimes)
+        self.dt = self.__compute_dt()
         if Hlist is not None:
             i = 0
             for reservoir in self.reservoirs:
                 reservoir.Hwater = Hlist[i]
                 i += 1
+    
+    def __compute_dt(self, scalar_dt=True):
+        """
+        Calculates the time step from the DateTime series of the input data
+        If scalar_dt:
+            Tests for and returns a single dt in days
+        Else:
+            Returns it in days using a centered approach for nonuniformly
+            spaced data. THIS IS NOT YET IMPLEMENTED IN THE FULL CODE
+        """
+        _dt = np.diff(self.time)
+        if scalar_dt:
+            _dt = float( np.mean(np.diff(self.time)) )
+            if (np.diff(self.time).astype(float) == _dt).all():
+                _dt /= 86400E9 # convert to days
+            else:
+                sys.exit("Holes in input data series")
+        else:
+            dt_timeSeries = np.array( _dt[:-1] + _dt[1:] ).astype(float) / 2.
+            dt = dt_timeSeries / 86400E9 # convert to days
+        return _dt
     
     def update(self, rain_at_timestep, ET_at_timestep=0.):
         """
@@ -111,6 +145,8 @@ class buckets(object):
         NOTE FALLACY: recharging before discharging,
         even though during the same time step
         consider changing to use half-recharge from each time step
+        
+        FOR LATER: , dt_at_timestep=self.dt
         """
         # Top layer is special: interacts with atmosphere
         recharge_at_timestep = rain_at_timestep - ET_at_timestep
@@ -152,7 +188,6 @@ class buckets(object):
             self.set_rainfall_time_series(rain)
         if self.rain is None:
             sys.exit("Please set the rainfall time series")
-        self.time = np.arange(len(self.rain)) * self.dt
         if ET:
             for ti in range(len(self.rain)):
                 Qi = self.update(rain[ti], self.ET[ti])
@@ -170,7 +205,12 @@ class buckets(object):
         Optionally pass specific discharge data to plot this as well.
         """
         fig = plt.figure()
-        plt.xlabel('Time [days]', fontsize=14)
+        ax = fig.add_subplot(1,1,1)
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%y-%m-%d'))
+        plt.xlabel('Date', fontsize=14)
+        #for tick in ax.get_xticklabels():
+        #    tick.set_rotation(45)
+        plt.xticks(rotation=45, horizontalalignment='right')
         plt.ylabel('[mm/day]', fontsize=14)
         plt.bar(self.time, height=self.rain/self.dt, width=1., align='center', label='Rainfall', linewidth=0, alpha=0.5)
         #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
