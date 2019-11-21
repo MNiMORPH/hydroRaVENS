@@ -56,6 +56,32 @@ class reservoir(object):
         self.Hwater -= dH
         self.excess = 0.
 
+def snowpack(object):
+
+    def __init__(self, melt_factor=1E-3):
+        """
+        A unique reservoir type that adds and removes water based on 
+        temperature.
+        
+        If included in a list of reservoirs within a watershed model,
+        should always be on top.
+        
+        The melt factor is given as a positive-degree-day factor
+        """
+        self.Hwater = 0. # SWE
+        self.melt_factor = melt_factor
+    
+    def set_temperature(T):
+        self.T = T
+        
+    def recharge(self, H):
+        if self.T <= 0:
+            self.Hwater += H
+    
+    def discharge(self, dt)
+        dH = np.min(Hwater, melt_factor * dt)
+        self.Hwater -= dH
+
 class buckets(object):
     """
     Incorportates a list of reservoirs into a linear hierarchy that sends water 
