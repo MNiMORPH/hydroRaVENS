@@ -20,6 +20,11 @@ for date in t_P_ET['Date']:
 years = np.array(years)
 t_P_ET = t_P_ET[years == 2000]
 
+# Temperature from Albert Lea file -- est as (max + min)/2.
+colnames = ['date', 'precip', 'snow', 'tmax', 'tmin', 'precip_mm', 'photoperiod', 'tmax_C', 'tmin_C']
+albert_lea = pd.read_csv('albert_lea_daily_precip_2000.csv', names = colnames)
+Tmean = ( albert_lea['tmax_C'] + albert_lea['tmin_C'] ) / 2.
+
 #import observed streamflow to compare w/model, currently using USGS daily data w/Q in mm/day
 colnames_Q = ['USGS', 'code', 'date', 'Q', 'Q_mm']
 Q_measured = pd.read_csv('cannon_welch_daily_2000.csv', names = colnames_Q)
@@ -40,18 +45,20 @@ strat_column = [res_surface, res_deep]
 
 # Initialize
 watershed = bh.buckets(reservoir_list=strat_column)
-watershed.initialize(t_P_ET['Date'], Hlist = [9.4706537227959871, 11.24098140709903])
+watershed.initialize(t_P_ET['Date'], Hlist = [2, 20], SWE=25.)
 # ET from the model seems too high: Q (data) = 3 * P (data) - ET (reanalysis)
 watershed.set_evapotranspiration( np.array(t_P_ET['Evapotranspiration [mm/day]'] * .68) )
+watershed.set_mean_temperature(Tmean)
 
 # Run
-watershed.run(rain=np.array(t_P_ET['Precipitation [mm/day]']), ET_flag=True)
+watershed.run(rain=np.array(t_P_ET['Precipitation [mm/day]']), ET_flag=True, Tmean_flag=True)
 
 # Finalize
 watershed.computeNashSutcliffeEfficiency(Q_measured['Q_mm'])
 print("NSE:", watershed.NSE)
 Hout = watershed.export_Hlist()
 print(Hout)
+print(watershed.snowpack.Hwater)
 #watershed.plot()
 watershed.plot(Q_measured['Q_mm'])
 

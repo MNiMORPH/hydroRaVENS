@@ -59,7 +59,7 @@ class reservoir(object):
 
 class snowpack(object):
 
-    def __init__(self, melt_factor=1E-3):
+    def __init__(self, melt_factor=0.5):
         """
         A unique reservoir type that adds and removes water based on 
         temperature.
@@ -67,7 +67,7 @@ class snowpack(object):
         If included in a list of reservoirs within a watershed model,
         should always be on top.
         
-        The melt factor is given as a positive-degree-day factor
+        The melt factor is given as a positive-degree-day factor [mm/day melt]
         """
         self.Hwater = 0. # SWE
         self.melt_factor = melt_factor
@@ -88,6 +88,7 @@ class snowpack(object):
         """
         if self.T <= 0:
             self.Hwater += H
+            self.H_infiltrated = 0.
         else:
             self.H_infiltrated = H
     
@@ -95,9 +96,12 @@ class snowpack(object):
         """
         Currently, all snowmelt goes to discharge
         """
-        dH = np.min((self.Hwater, self.melt_factor * dt))
-        self.H_discharge = dH
-        self.Hwater -= dH
+        if self.T > 0:
+            dH_melt = np.min((self.Hwater, self.melt_factor * dt))
+        else:
+            dH_melt = 0
+        self.H_discharge = dH_melt
+        self.Hwater -= dH_melt
 
 class buckets(object):
     """
@@ -141,7 +145,7 @@ class buckets(object):
             Hlist.append( reservoir.Hwater )
         return Hlist
     
-    def initialize(self, dateTimes, Hlist=None):
+    def initialize(self, dateTimes, Hlist=None, SWE=None):
         """
         Part of CSDMS BMI
         Can use this to initialize from an old run or a spin-up
@@ -165,6 +169,8 @@ class buckets(object):
             for reservoir in self.reservoirs:
                 reservoir.Hwater = Hlist[i]
                 i += 1
+        if SWE is not None:
+            self.snowpack.Hwater = SWE
     
     def __compute_dt(self, scalar_dt=True):
         """
