@@ -1,5 +1,3 @@
-#! /usr/bin/env python
-
 # Started by A. Wickert
 # 25 July 2019
 # Updated by J. Jones
