@@ -51,12 +51,13 @@ class reservoir(object):
 
     def discharge(self, dt):
         dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
-        self.H_exfiltrated = self.excess + dH * self.f_to_discharge
+        self.H_exfiltrated = dH * self.f_to_discharge
+        self.H_discharge = self.excess + self.H_exfiltrated
         self.H_infiltrated = dH * (1 - self.f_to_discharge)
         self.Hwater -= dH
         self.excess = 0.
 
-def snowpack(object):
+class snowpack(object):
 
     def __init__(self, melt_factor=1E-3):
         """
@@ -71,15 +72,31 @@ def snowpack(object):
         self.Hwater = 0. # SWE
         self.melt_factor = melt_factor
     
-    def set_temperature(T):
+    def set_melt_factor(self, melt_factor):
+        """
+        Change the melt factor (PDD)
+        """
+        self.melt_factor = melt_factor
+    
+    def set_temperature(self, T):
         self.T = T
         
     def recharge(self, H):
+        """
+        If T <= 0, all recharge to snowpack
+        Else, recharge magically bypasses snowpack
+        """
         if self.T <= 0:
             self.Hwater += H
+        else:
+            self.H_infiltrated = H
     
-    def discharge(self, dt)
-        dH = np.min(Hwater, melt_factor * dt)
+    def discharge(self, dt):
+        """
+        Currently, all snowmelt goes to discharge
+        """
+        dH = np.min((self.Hwater, self.melt_factor * dt))
+        self.H_discharge = dH
         self.Hwater -= dH
 
 class buckets(object):
@@ -93,6 +110,7 @@ class buckets(object):
     """
 
     def __init__(self, reservoir_list):
+        self.snowpack = snowpack() # allow changes to melt factor later
         self.reservoirs = reservoir_list
         self.rain = None
         self.ET = None
@@ -105,6 +123,13 @@ class buckets(object):
     
     def set_rainfall_time_series(self, rain):
         self.rain = np.array(rain)
+        
+    def set_mean_temperature(self, T):
+        """
+        Mean temperature each time step for the temperature-index approch to
+        basic snowpack modeling 
+        """
+        self.Tmean = np.array(T)
     
     def export_Hlist(self):
         """
@@ -162,9 +187,14 @@ class buckets(object):
             dt = dt_timeSeries / 86400E9 # convert to days
         return _dt
     
-    def update(self, rain_at_timestep, ET_at_timestep=0.):
+    def update(self, rain_at_timestep, ET_at_timestep, T_at_timestep):
         """
         Updates water flow for one time step (typically a day)
+        
+        rain_at_timestep: rainfall rate
+        ET_at_timestep: evapotranspiration
+        T_at_timestep: temperature; default "10" as a number above zero,
+                       meaning that there is no snowpack if T is unset
         
         NOTE FALLACY: recharging before discharging,
         even though during the same time step
@@ -172,15 +202,19 @@ class buckets(object):
         
         FOR LATER: , dt_at_timestep=self.dt
         """
-        # Top layer is special: interacts with atmosphere
+        # Top layer is special: snowpack
         recharge_at_timestep = rain_at_timestep - ET_at_timestep
-        self.reservoirs[0].recharge(recharge_at_timestep)
-        self.reservoirs[0].discharge(self.dt)
-        Qi = self.reservoirs[0].H_exfiltrated
-        for i in range(1, len(self.reservoirs)):
-            self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
+        self.snowpack.set_temperature(T_at_timestep)
+        self.snowpack.recharge(recharge_at_timestep)
+        self.snowpack.discharge(self.dt)
+        Qi = self.snowpack.H_discharge
+        for i in range(0, len(self.reservoirs)):
+            if i == 0:
+                self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
+            else:
+                self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
             self.reservoirs[i].discharge(self.dt)
-            Qi += self.reservoirs[i].H_exfiltrated
+            Qi += self.reservoirs[i].H_discharge
         return Qi
     
     def evapotranspirationChang2019(self, Tmax, Tmin, photoperiod):
@@ -204,23 +238,31 @@ class buckets(object):
         """
         self.ET = np.array(ET)
 
-    def run(self, rain=None, ET=False):
+    def run(self, rain=None, ET_flag=False, Tmean_flag=False):
+        # SET UP VARIABLES
         self.Q = [] # discharge
+        self.SWE = [] # snowpack
         if rain is not None:
             if self.rain is not None:
                 print("Warning: overwriting existing rainfall time series.")
             self.set_rainfall_time_series(rain)
         if self.rain is None:
             sys.exit("Please set the rainfall time series")
-        if ET:
-            for ti in range(len(self.rain)):
-                Qi = self.update(rain[ti], self.ET[ti])
-                self.Q.append(Qi)
+        if ET_flag:
+            ET = self.ET
         else:
             print("Warning: neglecting evapotranspiration.")
-            for ti in range(len(self.rain)):
-                Qi = self.update(rain[ti])
-                self.Q.append(Qi)
+            ET = np.zeros(self.rain.shape)
+        if Tmean_flag:
+            Tmean = self.Tmean
+        else:
+            print("Warning: neglecting snowpack")
+            Tmean = np.ones(self.rain.shape) # >0 for no snowpack
+        # RUN
+        for ti in range(len(self.rain)):
+            Qi = self.update(rain[ti], ET[ti], Tmean[ti])
+            self.Q.append(Qi)
+            self.SWE.append(self.snowpack.Hwater)
         self.Q = np.array(self.Q)
 
     def plot(self, Qdata=None):
