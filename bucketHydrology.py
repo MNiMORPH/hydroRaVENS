@@ -90,17 +90,20 @@ class snowpack(object):
             self.Hwater += H
             self.H_infiltrated = 0.
         else:
+            # Incoming precip component; melt sums with this
             self.H_infiltrated = H
     
     def discharge(self, dt):
         """
-        Currently, all snowmelt goes to discharge
+        Currently, 50/50 snowmelt split between infiltration and discharge.
+        This is arbitrary.
         """
         if self.T > 0:
-            dH_melt = np.min((self.Hwater, self.melt_factor * dt))
+            dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
+            self.H_infiltrated += dH_melt * 1.
         else:
             dH_melt = 0
-        self.H_discharge = dH_melt
+        self.H_discharge = dH_melt * 0.
         self.Hwater -= dH_melt
 
 class buckets(object):
