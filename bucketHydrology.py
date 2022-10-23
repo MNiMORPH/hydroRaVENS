@@ -7,11 +7,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.dates as mdates
 import sys
+import warnings
 
 class reservoir(object):
     """
     Generic reservoir. Accepts new water (recharge), and sends it to other
-    reservoirs and/or out of the system (discharge) at a rate that is 
+    reservoirs and/or out of the system (discharge) at a rate that is
     proportional to the amount of water held in the reservoir.
     """
 
@@ -19,10 +20,10 @@ class reservoir(object):
 
     def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf):
         """
-        t_efold: e-folding time for reservoir depletion (same units as time 
+        t_efold: e-folding time for reservoir depletion (same units as time
                  steps; typically days)
         f_to_discharge: fraction of the water lost during that e-folding time
-                        that exfiltrates to river discharge (as opposed to 
+                        that exfiltrates to river discharge (as opposed to
                         entering one or more other reservoirs)
         Hmax: Maximum water volume that can be held
         """
@@ -32,7 +33,21 @@ class reservoir(object):
         self.excess = 0.
         self.Hout = np.nan
         self.f_to_discharge = f_to_discharge
-    
+
+        # Check values and note whether they are reasonable
+        if t_efold < 0:
+            raise ValueError("Negative t_efold nonsensical.")
+        if f_to_discharge < 0:
+            raise ValueError("Negative f_to_discharge not possible")
+        elif f_to_discharge > 1:
+            raise ValueError("f_to_discharge: Cannot discharge >100% of water")
+        elif f_to_discharge == 0:
+            warnings.warn("All water infiltrates when f_to_discharge is 0:"+
+                          " you may have created a\n"+
+                          "redudnant pass-through water-storage layer")
+        if Hmax < 0:
+            raise ValueError("Hmax must be >= 0 (and >0 makes more sense)")
+
     def recharge(self, H):
         """
         Recharge can be positive (precipitation) or negative
@@ -61,26 +76,26 @@ class snowpack(object):
 
     def __init__(self, melt_factor=0.5):
         """
-        A unique reservoir type that adds and removes water based on 
+        A unique reservoir type that adds and removes water based on
         temperature.
-        
+
         If included in a list of reservoirs within a watershed model,
         should always be on top.
-        
+
         The melt factor is given as a positive-degree-day factor [mm/day melt]
         """
         self.Hwater = 0. # SWE
         self.melt_factor = melt_factor
-    
+
     def set_melt_factor(self, melt_factor):
         """
         Change the melt factor (PDD)
         """
         self.melt_factor = melt_factor
-    
+
     def set_temperature(self, T):
         self.T = T
-        
+
     def recharge(self, H):
         """
         If T <= 0, all recharge to snowpack
@@ -92,7 +107,7 @@ class snowpack(object):
         else:
             # Incoming precip component; melt sums with this
             self.H_infiltrated = H
-    
+
     def discharge(self, dt):
         """
         Currently, 50/50 snowmelt split between infiltration and discharge.
@@ -108,12 +123,12 @@ class snowpack(object):
 
 class buckets(object):
     """
-    Incorportates a list of reservoirs into a linear hierarchy that sends water 
+    Incorportates a list of reservoirs into a linear hierarchy that sends water
     either downwards our out to the surface.
-    
+
     reservoir_list: list of subsurface layers in order from top to bottom
                     (surface to deep groundwater)
-    
+
     """
 
     def __init__(self, reservoir_list):
@@ -121,23 +136,33 @@ class buckets(object):
         self.reservoirs = reservoir_list
         self.rain = None
         self.ET = None
+
+        # Check if bottom reservoir discharges all to river:
+        # conserve mass
+        # But allow through with a warning in case the user wants a
+        # deep and non-discharging reservoir (although this could be set up)
+        # explicitly too)
+        if self.reservoirs[-1].f_to_discharge < 1:
+            warnings.warn("f_to_discharge of bottom water-storage layer < 1.\n"+
+                          "You are not conserving mass.")
+
         # Evapotranspiration
         self.Chang_I = 41.47044637
         self.Chang_a_i = 6.75E-7*self.Chang_I**3 \
                          - 7.72E-5*self.Chang_I**2 \
                          + 1.7912E-2*self.Chang_I \
                          + 0.49239
-    
+
     def set_rainfall_time_series(self, rain):
         self.rain = np.array(rain)
-        
+
     def set_mean_temperature(self, T):
         """
         Mean temperature each time step for the temperature-index approch to
-        basic snowpack modeling 
+        basic snowpack modeling
         """
         self.Tmean = np.array(T)
-    
+
     def export_Hlist(self):
         """
         Export the list of water depths, for reinitialization
@@ -147,16 +172,16 @@ class buckets(object):
         for reservoir in self.reservoirs:
             Hlist.append( reservoir.Hwater )
         return Hlist
-    
+
     def initialize(self, dateTimes, Hlist=None, SWE=None):
         """
         Part of CSDMS BMI
         Can use this to initialize from an old run or a spin-up
-        
+
         dateTimes: A list/array/etc. of python DateTime objects that go along
                    with the time series of precipitation.
                    IF A FUTURE CAPABILITY FOR NONUNIFORM DATA IS ENACTED
-                   The calculation will be exclusive of the outer two data 
+                   The calculation will be exclusive of the outer two data
                    points in this series in order to calculate a time step,
                    *unless* a specific dt is indicated
                    FOR FUTURE: dt: Time step [days]; , dt=None
@@ -174,7 +199,7 @@ class buckets(object):
                 i += 1
         if SWE is not None:
             self.snowpack.Hwater = SWE
-    
+
     def __compute_dt(self, scalar_dt=True):
         """
         Calculates the time step from the DateTime series of the input data
@@ -195,42 +220,48 @@ class buckets(object):
             dt_timeSeries = np.array( _dt[:-1] + _dt[1:] ).astype(float) / 2.
             dt = dt_timeSeries / 86400E9 # convert to days
         return _dt
-    
+
     def update(self, rain_at_timestep, ET_at_timestep, T_at_timestep):
         """
         Updates water flow for one time step (typically a day)
-        
+
         rain_at_timestep: rainfall rate
         ET_at_timestep: evapotranspiration
         T_at_timestep: temperature; default "10" as a number above zero,
                        meaning that there is no snowpack if T is unset
-        
+
         NOTE FALLACY: recharging before discharging,
         even though during the same time step
         consider changing to use half-recharge from each time step
-        
+
         FOR LATER: , dt_at_timestep=self.dt
         """
-        # Top layer is special: snowpack
         recharge_at_timestep = rain_at_timestep - ET_at_timestep
         self.snowpack.set_temperature(T_at_timestep)
         self.snowpack.recharge(recharge_at_timestep)
         self.snowpack.discharge(self.dt)
         Qi = self.snowpack.H_discharge
+        # First, compute snowpack and direct discharge
         for i in range(0, len(self.reservoirs)):
+            # Top layer is special: snowpack
             if i == 0:
                 self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
             else:
                 self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
             self.reservoirs[i].discharge(self.dt)
             Qi += self.reservoirs[i].H_discharge
+        # Then passs infiltrated water downwards
+        # Using this as a separate step so the water can take only one step
+        # per time step -- either down or out. This is quite schematic.
+        for i in range(1, len(self.reservoirs)):
+            self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         return Qi
-    
+
     def evapotranspirationChang2019(self, Tmax, Tmin, photoperiod):
         """
         Modified daily Thorntwaite Equation
         """
-        
+
         Teff = 0.5 * 0.69 * (3*Tmax - Tmin)
         C = photoperiod/360.
 
@@ -311,4 +342,3 @@ class buckets(object):
         if np.sum(1 - _realvalue):
             print("Calculated with ", np.sum(1 - _realvalue), "no-data points")
         self.NSE = 1 - NSE_num / NSE_denom
-        
