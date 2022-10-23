@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.dates as mdates
 import sys
+import warnings
 
 class reservoir(object):
     """
@@ -32,6 +33,20 @@ class reservoir(object):
         self.excess = 0.
         self.Hout = np.nan
         self.f_to_discharge = f_to_discharge
+
+        # Check values and note whether they are reasonable
+        if t_efold < 0:
+            raise ValueError("Negative t_efold nonsensical.")
+        if f_to_discharge < 0:
+            raise ValueError("Negative f_to_discharge not possible")
+        elif f_to_discharge > 1:
+            raise ValueError("f_to_discharge: Cannot discharge >100% of water")
+        elif f_to_discharge == 0:
+            warnings.warn("All water infiltrates when f_to_discharge is 0:"+
+                          " you may have created a\n"+
+                          "redudnant pass-through water-storage layer")
+        if Hmax < 0:
+            raise ValueError("Hmax must be >= 0 (and >0 makes more sense)")
 
     def recharge(self, H):
         """
@@ -121,6 +136,16 @@ class buckets(object):
         self.reservoirs = reservoir_list
         self.rain = None
         self.ET = None
+
+        # Check if bottom reservoir discharges all to river:
+        # conserve mass
+        # But allow through with a warning in case the user wants a
+        # deep and non-discharging reservoir (although this could be set up)
+        # explicitly too)
+        if self.reservoirs[-1].f_to_discharge < 1:
+            warnings.warn("f_to_discharge of bottom water-storage layer < 1.\n"+
+                          "You are not conserving mass.")
+
         # Evapotranspiration
         self.Chang_I = 41.47044637
         self.Chang_a_i = 6.75E-7*self.Chang_I**3 \
