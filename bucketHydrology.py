@@ -5,6 +5,7 @@
 
 import numpy as np
 from matplotlib import pyplot as plt
+import pandas as pd
 import matplotlib.dates as mdates
 import sys
 import warnings
@@ -19,7 +20,7 @@ class Reservoir(object):
 
     import numpy as np
 
-    def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf):
+    def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf, H0=0.):
         """
         t_efold: e-folding time for reservoir depletion (same units as time
                  steps; typically days)
@@ -28,7 +29,7 @@ class Reservoir(object):
                         entering one or more other reservoirs)
         Hmax: Maximum water volume that can be held
         """
-        self.Hwater = 0.
+        self.Hwater = H0
         self.Hmax = Hmax
         self.t_efold = t_efold
         self.excess = 0.
@@ -207,18 +208,29 @@ class Buckets(object):
                                  'water_reservoir_effective_depths__m'+
                                  'within "initial_conditions".')
 
-         # Then assign these to the internal variables
-         # cfg['reservoirs']['maximum_effective_depths__m']
-
+        # If all are the same length, then we will assign a number of reservoirs
+        self.n_reservoirs = len(cfg['initial_conditions']['water_reservoir_effective_depths__m'])
+        # Using this, we will build a list of reservoir objects
+        # and initialize them based on the provided inputs
+        self._Reservoir_object_list = [
+                Reservoir(
+                t_efold = cfg['reservoirs']['e_folding_residence_times__days'][i],
+                f_to_discharge = cfg['reservoirs']['exfiltration_fractions'][i],
+                Hmax = cfg['reservoirs']['maximum_effective_depths__m'][i],
+                H0 = cfg['initial_conditions']['water_reservoir_effective_depths__m'][i]
+                )
+                for i in range(self.n_reservoirs)]
+        # Python note: This is a compact way of a loop and using append()
 
         # Set variables based on yaml
+        """
         self.Hwater = 0.
         self.Hmax = Hmax
         self.t_efold = t_efold
         self.excess = 0.
         self.Hout = np.nan
         self.f_to_discharge = f_to_discharge
-
+        """
 
     def old_initialize(self, dateTimes, Hlist=None, SWE=None):
         """
