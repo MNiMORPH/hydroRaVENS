@@ -10,7 +10,7 @@ import sys
 import warnings
 import yaml
 
-class reservoir(object):
+class Reservoir(object):
     """
     Generic reservoir. Accepts new water (recharge), and sends it to other
     reservoirs and/or out of the system (discharge) at a rate that is
@@ -73,7 +73,7 @@ class reservoir(object):
         self.Hwater -= dH
         self.excess = 0.
 
-class snowpack(object):
+class Snowpack(object):
 
     def __init__(self, melt_factor=0.5):
         """
@@ -122,7 +122,7 @@ class snowpack(object):
         self.H_discharge = dH_melt * 0.
         self.Hwater -= dH_melt
 
-class buckets(object):
+class Buckets(object):
     """
     Incorportates a list of reservoirs into a linear hierarchy that sends water
     either downwards our out to the surface.
