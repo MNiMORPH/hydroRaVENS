@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 import matplotlib.dates as mdates
 import sys
 import warnings
+import yaml
 
 class reservoir(object):
     """
@@ -173,7 +174,53 @@ class buckets(object):
             Hlist.append( reservoir.Hwater )
         return Hlist
 
-    def initialize(self, dateTimes, Hlist=None, SWE=None):
+    def __init__(self):
+        # Empty __init__ as another option
+        # Perhaps overloading isn't the best way to go here.
+        # But I wil hold it here as a bookmark until I change (potentially)
+        # the full initialization and instantiation method set
+        pass
+
+    def initialize(self, config_file=None):
+        if config_file is None:
+            warnings.warn("No configuration file provided; all values needed "+
+                          "for a model run therefore must be set indpendently.")
+
+        # Import yml configuration file
+        with open(config_file, "r") as ymlfile:
+            cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
+
+        # Import dataframe from yml
+        self.hydrodata = pd.read_csv(cfg['timeseries']['datafile'])
+
+        # Set variables on reservoirs
+        # First, check if all reservoirs have the same length
+        for _key in cfg['reservoirs'].keys():
+            if len(cfg['reservoirs'][_key]) == \
+            len(cfg['initial_conditions']['water_reservoir_effective_depths__m']):
+                pass
+            else:
+                raise ValueError(_key + 'within "reservoirs" contains a\n'+
+                                 'different number of entries, implying'+
+                                 'a different number of subsurface water\n'+
+                                 'reservoirs, than '+
+                                 'water_reservoir_effective_depths__m'+
+                                 'within "initial_conditions".')
+
+         # Then assign these to the internal variables
+         # cfg['reservoirs']['maximum_effective_depths__m']
+
+
+        # Set variables based on yaml
+        self.Hwater = 0.
+        self.Hmax = Hmax
+        self.t_efold = t_efold
+        self.excess = 0.
+        self.Hout = np.nan
+        self.f_to_discharge = f_to_discharge
+
+
+    def old_initialize(self, dateTimes, Hlist=None, SWE=None):
         """
         Part of CSDMS BMI
         Can use this to initialize from an old run or a spin-up
