@@ -4,7 +4,13 @@
 
 # Should timeseries have no subcategories?
 timeseries:
-        datafile: 'CannonTest2022.csv'
+        # Columns:
+        #   - Date
+        #   - Precipitation [mm/day]
+        #   - Discharge [m^3/s]
+        #   - Temperature [C]               <-- MEAN DAILY; OFTEN (MAX+MIN)/2
+        #   - Evaptranspiration [mm/day]    <-- OPTIONAL
+        datafile: CannonTestInput.csv
 
 initial_conditions:
         water_reservoir_effective_depths__m:
@@ -14,6 +20,12 @@ initial_conditions:
 
 catchment:
         drainage_basin_area__km2: 3800
+        # ET options are:
+        #   - ThorntwaiteChang2019
+        #   - datafile
+        # The former is calculated from temperature.
+        # The latter is input directly in the "datafile"
+        evapotranspiration_method: datafile
         water_year_start_month: 10
 
 # Reservoirs are conceptual water stores, and are organized from top
