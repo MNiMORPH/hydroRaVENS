@@ -189,16 +189,16 @@ class Buckets(object):
 
         # Import yml configuration file
         with open(config_file, "r") as ymlfile:
-            cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
+            self.cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
         # Import dataframe from yml
-        self.hydrodata = pd.read_csv(cfg['timeseries']['datafile'])
+        self.hydrodata = pd.read_csv(self.cfg['timeseries']['datafile'])
 
         # Set variables on reservoirs
         # First, check if all reservoirs have the same length
-        for _key in cfg['reservoirs'].keys():
-            if len(cfg['reservoirs'][_key]) == \
-            len(cfg['initial_conditions']['water_reservoir_effective_depths__m']):
+        for _key in self.cfg['reservoirs'].keys():
+            if len(self.cfg['reservoirs'][_key]) == \
+            len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m']):
                 pass
             else:
                 raise ValueError(_key + 'within "reservoirs" contains a\n'+
@@ -209,28 +209,25 @@ class Buckets(object):
                                  'within "initial_conditions".')
 
         # If all are the same length, then we will assign a number of reservoirs
-        self.n_reservoirs = len(cfg['initial_conditions']['water_reservoir_effective_depths__m'])
+        self.n_reservoirs = len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m'])
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
         self._Reservoir_object_list = [
                 Reservoir(
-                t_efold = cfg['reservoirs']['e_folding_residence_times__days'][i],
-                f_to_discharge = cfg['reservoirs']['exfiltration_fractions'][i],
-                Hmax = cfg['reservoirs']['maximum_effective_depths__m'][i],
-                H0 = cfg['initial_conditions']['water_reservoir_effective_depths__m'][i]
+                t_efold = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
+                f_to_discharge = self.cfg['reservoirs']['exfiltration_fractions'][i],
+                Hmax = self.cfg['reservoirs']['maximum_effective_depths__m'][i],
+                H0 = self.cfg['initial_conditions']['water_reservoir_effective_depths__m'][i]
                 )
                 for i in range(self.n_reservoirs)]
         # Python note: This is a compact way of a loop and using append()
 
-        # Set variables based on yaml
-        """
-        self.Hwater = 0.
-        self.Hmax = Hmax
-        self.t_efold = t_efold
-        self.excess = 0.
-        self.Hout = np.nan
-        self.f_to_discharge = f_to_discharge
-        """
+        # Set scalar variables based on yaml
+        #drainage_basin_area__km2
+        #water_year_start_month
+        self.melt_factor = self.cfg['snowmelt']['PDD_melt_factor']
+
+
 
     def old_initialize(self, dateTimes, Hlist=None, SWE=None):
         """
