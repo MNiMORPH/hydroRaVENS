@@ -134,19 +134,8 @@ class Buckets(object):
     """
 
     def __init__(self, reservoir_list):
-        self.snowpack = snowpack() # allow changes to melt factor later
-        self.reservoirs = reservoir_list
         self.rain = None
         self.ET = None
-
-        # Check if bottom reservoir discharges all to river:
-        # conserve mass
-        # But allow through with a warning in case the user wants a
-        # deep and non-discharging reservoir (although this could be set up)
-        # explicitly too)
-        if self.reservoirs[-1].f_to_discharge < 1:
-            warnings.warn("f_to_discharge of bottom water-storage layer < 1.\n"+
-                          "You are not conserving mass.")
 
         # Evapotranspiration
         self.Chang_I = 41.47044637
@@ -154,6 +143,7 @@ class Buckets(object):
                          - 7.72E-5*self.Chang_I**2 \
                          + 1.7912E-2*self.Chang_I \
                          + 0.49239
+        self.ET_multiplier_list = []
 
     def set_rainfall_time_series(self, rain):
         self.rain = np.array(rain)
@@ -174,13 +164,6 @@ class Buckets(object):
         for reservoir in self.reservoirs:
             Hlist.append( reservoir.Hwater )
         return Hlist
-
-    def __init__(self):
-        # Empty __init__ as another option
-        # Perhaps overloading isn't the best way to go here.
-        # But I wil hold it here as a bookmark until I change (potentially)
-        # the full initialization and instantiation method set
-        self.ET_multiplier_list = []
 
     def initialize(self, config_file=None):
         """
@@ -225,6 +208,14 @@ class Buckets(object):
                 )
                 for i in range(self.n_reservoirs)]
         # Python note: This is a compact way of a loop and using append()
+
+        # Check if bottom reservoir discharges all to river: conserve mass.
+        # But allow through with a warning in case the user wants a
+        # deep and non-discharging reservoir (although this could be set up)
+        # explicitly too)
+        if self.reservoirs[-1].f_to_discharge < 1:
+            warnings.warn("f_to_discharge of bottom water-storage layer < 1.\n"+
+                          "You are not conserving mass.")
 
         # Set scalar variables based on yaml
         self.melt_factor = self.cfg['snowmelt']['PDD_melt_factor']
