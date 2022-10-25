@@ -8,7 +8,10 @@ timeseries:
         #   - Date
         #   - Precipitation [mm/day]
         #   - Discharge [m^3/s]
-        #   - Temperature [C]               <-- MEAN DAILY; OFTEN (MAX+MIN)/2
+        #   - Mean Temperature [C]
+        #   - Minimum Temperature [C]
+        #   - Maximum Temperature [C]
+        #   - Photoperiod [hr]
         #   - Evaptranspiration [mm/day]    <-- OPTIONAL
         datafile: CannonTestInput.csv
 
