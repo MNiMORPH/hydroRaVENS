@@ -245,22 +245,32 @@ class Buckets(object):
         else:
             raise ValueError("All time steps must be 1 day.")
 
-    def update(self, rain_at_timestep, ET_at_timestep, T_at_timestep):
+        # Start out at first timestep
+        # Could modify this to pick up a run in the middle
+        # Or start at the beginning of a water year
+        # for example
+        self._timestep_i = self.hydrodata.index[0]
+
+    def update(self):
         """
         Updates water flow for one time step (typically a day)
-
-        rain_at_timestep: rainfall rate
-        ET_at_timestep: evapotranspiration
-        T_at_timestep: temperature; default "10" as a number above zero,
-                       meaning that there is no snowpack if T is unset
 
         NOTE FALLACY: recharging before discharging,
         even though during the same time step
         consider changing to use half-recharge from each time step
 
         FOR LATER: , dt_at_timestep=self.dt
+        FOR SOONER: WATER-YEAR BALANCE
         """
-        recharge_at_timestep = rain_at_timestep - ET_at_timestep
+
+        # Nonfunctional update in progress
+        if evapotranspiration_method == 'datafile':
+            recharge_at_timestep = \
+                self.hydrodata['Precipitation [mm/day]'][self._timestep_i] \
+                - self.hydrodata['Evapotranspiration [mm/day]'][self._timestep_i]
+        elif evapotranspiration_method == 'ThorntwaiteChang2019':
+            pass
+
         self.snowpack.set_temperature(T_at_timestep)
         self.snowpack.recharge(recharge_at_timestep)
         self.snowpack.discharge(self.dt)
@@ -285,6 +295,12 @@ class Buckets(object):
         """
         Modified daily Thorntwaite Equation
         """
+
+        # If variables are not specified, gather them from the input data set
+        if Tmax is None:
+            Tmin =
+        if Tmin is None:
+
 
         Teff = 0.5 * 0.69 * (3*Tmax - Tmin)
         C = photoperiod/360.
