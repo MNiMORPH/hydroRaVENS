@@ -306,12 +306,6 @@ class Buckets(object):
         Modified daily Thorntwaite Equation
         """
 
-        # If variables are not specified, gather them from the input data set
-        if Tmax is None:
-            Tmin =
-        if Tmin is None:
-
-
         Teff = 0.5 * 0.69 * (3*Tmax - Tmin)
         C = photoperiod/360.
 
