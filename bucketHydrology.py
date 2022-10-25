@@ -245,54 +245,6 @@ class Buckets(object):
         else:
             raise ValueError("All time steps must be 1 day.")
 
-    def old_initialize(self, dateTimes, Hlist=None, SWE=None):
-        """
-        Part of CSDMS BMI
-        Can use this to initialize from an old run or a spin-up
-
-        dateTimes: A list/array/etc. of python DateTime objects that go along
-                   with the time series of precipitation.
-                   IF A FUTURE CAPABILITY FOR NONUNIFORM DATA IS ENACTED
-                   The calculation will be exclusive of the outer two data
-                   points in this series in order to calculate a time step,
-                   *unless* a specific dt is indicated
-                   FOR FUTURE: dt: Time step [days]; , dt=None
-        Hlist: A list of water depths, in the same order as the reservoirs
-               (top to bottom) that can be used to set initial water depths.
-               This can be helpful for initial conditions or to return from a
-               spin up.
-        """
-        self.time = np.array(dateTimes)
-        self.dt = self.__compute_dt()
-        if Hlist is not None:
-            i = 0
-            for reservoir in self.reservoirs:
-                reservoir.Hwater = Hlist[i]
-                i += 1
-        if SWE is not None:
-            self.snowpack.Hwater = SWE
-
-    def __compute_dt(self, scalar_dt=True):
-        """
-        Calculates the time step from the DateTime series of the input data
-        If scalar_dt:
-            Tests for and returns a single dt in days
-        Else:
-            Returns it in days using a centered approach for nonuniformly
-            spaced data. THIS IS NOT YET IMPLEMENTED IN THE FULL CODE
-        """
-        _dt = np.diff(self.time)
-        if scalar_dt:
-            _dt = float( np.mean(np.diff(self.time)) )
-            if (np.diff(self.time).astype(float) == _dt).all():
-                _dt /= 86400E9 # convert to days
-            else:
-                sys.exit("Holes in input data series")
-        else:
-            dt_timeSeries = np.array( _dt[:-1] + _dt[1:] ).astype(float) / 2.
-            dt = dt_timeSeries / 86400E9 # convert to days
-        return _dt
-
     def update(self, rain_at_timestep, ET_at_timestep, T_at_timestep):
         """
         Updates water flow for one time step (typically a day)
