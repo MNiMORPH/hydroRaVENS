@@ -180,7 +180,7 @@ class Buckets(object):
         # Perhaps overloading isn't the best way to go here.
         # But I wil hold it here as a bookmark until I change (potentially)
         # the full initialization and instantiation method set
-        pass
+        self.ET_multiplier_list = []
 
     def initialize(self, config_file=None):
         """
@@ -250,6 +250,16 @@ class Buckets(object):
         # Or start at the beginning of a water year
         # for example
         self._timestep_i = self.hydrodata.index[0]
+
+    def compute_ET(self):
+        """
+        Computes an evapotranspiration column from the input data.
+
+        Does this in two steps:
+        1. Initial ET (provided or from Thorntwaite)
+        2. Modifying this over a water year to enforce water balance
+        """
+        pass
 
     def update(self):
         """
