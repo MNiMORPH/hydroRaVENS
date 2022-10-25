@@ -133,7 +133,7 @@ class Buckets(object):
 
     """
 
-    def __init__(self, reservoir_list):
+    def __init__(self):
         self.rain = None
         self.ET = None
 
@@ -199,7 +199,7 @@ class Buckets(object):
         self.n_reservoirs = len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m'])
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
-        self._Reservoir_object_list = [
+        self.reservoirs = [
                 Reservoir(
                 t_efold = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
                 f_to_discharge = self.cfg['reservoirs']['exfiltration_fractions'][i],
