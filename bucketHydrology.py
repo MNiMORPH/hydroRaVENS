@@ -183,6 +183,9 @@ class Buckets(object):
         pass
 
     def initialize(self, config_file=None):
+        """
+        Part of CSDMS BMI
+        """
         if config_file is None:
             warnings.warn("No configuration file provided; all values needed "+
                           "for a model run therefore must be set indpendently.")
@@ -192,7 +195,8 @@ class Buckets(object):
             self.cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
 
         # Import dataframe from yml
-        self.hydrodata = pd.read_csv(self.cfg['timeseries']['datafile'])
+        self.hydrodata = pd.read_csv(self.cfg['timeseries']['datafile'],
+                            parse_dates=['Date'])
 
         # Set variables on reservoirs
         # First, check if all reservoirs have the same length
@@ -223,11 +227,23 @@ class Buckets(object):
         # Python note: This is a compact way of a loop and using append()
 
         # Set scalar variables based on yaml
-        #drainage_basin_area__km2
-        #water_year_start_month
         self.melt_factor = self.cfg['snowmelt']['PDD_melt_factor']
+        self.et_method = self.cfg['catchment']['evapotranspiration_method']
+        self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
+        self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
 
+        # Instantiate snowpack
+        self.snowpack = Snowpack() # allow changes to melt factor later
+        # Initial conditions if resuming from prior run
+        self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
+        # H0 in loop above.
 
+        # Check that dt is 1 day everywhere.
+        # Do not work otherwise.
+        if (self.hydrodata['Date'].diff()[1:] == pd.Timedelta('1 day') ).all():
+            self.dt = 1.
+        else:
+            raise ValueError("All time steps must be 1 day.")
 
     def old_initialize(self, dateTimes, Hlist=None, SWE=None):
         """
