@@ -29,6 +29,7 @@ catchment:
         # The former is calculated from temperature.
         # The latter is input directly in the "datafile"
         evapotranspiration_method: datafile
+        # USGS water year starts in October
         water_year_start_month: 10
 
 general:
