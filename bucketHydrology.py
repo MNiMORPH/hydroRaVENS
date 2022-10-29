@@ -143,7 +143,6 @@ class Buckets(object):
                          - 7.72E-5*self.Chang_I**2 \
                          + 1.7912E-2*self.Chang_I \
                          + 0.49239
-        self.ET_multiplier_list = []
 
     def set_rainfall_time_series(self, rain):
         self.rain = np.array(rain)
@@ -290,7 +289,9 @@ class Buckets(object):
         # There should be a better way to do this fully in an operation
         # rather than adding it to the dataframe + memory
         # But this is pretty straightforward and doesn't use much memory
-        self.hydrodata = self.hydrodata.merge(self.hydromeansWY['ET multiplier'], on='Water Year')
+        self.hydrodata = self.hydrodata.merge(
+                                    self.hydromeansWY['ET multiplier'],
+                                    on='Water Year' )
         self.hydrodata['ET for model [mm/day]'] = \
                                     _raw_ET * self.hydrodata['ET multiplier']
 
@@ -305,14 +306,6 @@ class Buckets(object):
         FOR LATER: , dt_at_timestep=self.dt
         FOR SOONER: WATER-YEAR BALANCE
         """
-
-        # Nonfunctional update in progress
-        if evapotranspiration_method == 'datafile':
-            recharge_at_timestep = \
-                self.hydrodata['Precipitation [mm/day]'][self._timestep_i] \
-                - self.hydrodata['Evapotranspiration [mm/day]'][self._timestep_i]
-        elif evapotranspiration_method == 'ThorntwaiteChang2019':
-            pass
 
         self.snowpack.set_temperature(T_at_timestep)
         self.snowpack.recharge(recharge_at_timestep)
@@ -356,12 +349,6 @@ class Buckets(object):
                    + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
                      * (Teff > 0) * (Teff < 26)
 
-    def set_evapotranspiration(self, ET):
-        """
-        User provides ET time series
-        """
-        self.ET = np.array(ET)
-
     def run(self, rain=None, ET_flag=False, Tmean_flag=False):
         # SET UP VARIABLES
         self.Q = [] # discharge
@@ -375,7 +362,7 @@ class Buckets(object):
         if ET_flag:
             ET = self.ET
         else:
-            print("Warning: neglecting evapotranspiration.")
+            warnings.warn("Warning: neglecting evapotranspiration.")
             ET = np.zeros(self.rain.shape)
         if Tmean_flag:
             Tmean = self.Tmean
