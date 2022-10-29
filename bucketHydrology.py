@@ -242,6 +242,35 @@ class Buckets(object):
         # for example
         self._timestep_i = self.hydrodata.index[0]
 
+    def compute_water_year(self):
+        """
+        Adds a "water year" column to the Pandas DataFrame
+        """
+        self.hydrodata['WaterYear'] = pd.DatetimeIndex(self.hydrodata['Date']).year
+        self.hydrodata['WaterYear'] += \
+            pd.DatetimeIndex(self.hydrodata['Date']).month >= self.water_year_start_month
+
+    def compute_ET_multiplier(self):
+        """
+        Calculates the total amount of evapotranspiration required to balance
+        discharge and precipitation in each water year
+        """
+        # Originally used "sum", but then used "mean" so the headers would
+        # still be sensible
+        self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['WaterYear']).mean()
+        # Specific discharge: m^3/s to mm/day
+        self.hydromeansWY['Specific discharge [mm/day]'] = \
+                            self.hydromeansWY['Discharge [m^3/s]'] / \
+                            (self.drainage_basin_area__km2*1E3) * 86400
+        # maybe not needed
+        self.hydromeansWY['Runoff ratio'] = \
+                            self.hydromeansWY['Specific discharge [mm/day]'] / \
+                            self.hydromeansWY['Precipitation [mm/day]']
+        _ET_required = - ( self.hydromeansWY['Specific discharge [mm/day]'] -
+                            self.hydromeansWY['Precipitation [mm/day]'] )
+        self.hydromeansWY['ET multiplier'] = _ET_required / \
+                            self.hydromeansWY['Evapotranspiration [mm/day]']
+
     def compute_ET(self):
         """
         Computes an evapotranspiration column from the input data.
