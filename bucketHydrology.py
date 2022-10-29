@@ -246,8 +246,8 @@ class Buckets(object):
         """
         Adds a "water year" column to the Pandas DataFrame
         """
-        self.hydrodata['WaterYear'] = pd.DatetimeIndex(self.hydrodata['Date']).year
-        self.hydrodata['WaterYear'] += \
+        self.hydrodata['Water Year'] = pd.DatetimeIndex(self.hydrodata['Date']).year
+        self.hydrodata['Water Year'] += \
             pd.DatetimeIndex(self.hydrodata['Date']).month >= self.water_year_start_month
 
     def compute_ET_multiplier(self):
@@ -257,7 +257,7 @@ class Buckets(object):
         """
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
-        self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['WaterYear']).mean()
+        self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['Water Year']).mean()
         # Specific discharge: m^3/s to mm/day
         self.hydromeansWY['Specific discharge [mm/day]'] = \
                             self.hydromeansWY['Discharge [m^3/s]'] / \
@@ -279,7 +279,20 @@ class Buckets(object):
         1. Initial ET (provided or from Thorntwaite)
         2. Modifying this over a water year to enforce water balance
         """
-        pass
+        # Nonfunctional update in progress
+        if self.et_method == 'datafile':
+            _raw_ET = self.hydrodata['Evapotranspiration [mm/day]']
+        elif self.et_method == 'ThorntwaiteChang2019':
+            _raw_ET = self.evapotranspirationChang2019()
+        else:
+            raise ValueError('evapotranspiration_method must be "datafile" or '+
+                             '"ThorntwaiteChang2019".')
+        # There should be a better way to do this fully in an operation
+        # rather than adding it to the dataframe + memory
+        # But this is pretty straightforward and doesn't use much memory
+        self.hydrodata = self.hydrodata.merge(self.hydromeansWY['ET multiplier'], on='Water Year')
+        self.hydrodata['ET for model [mm/day]'] = \
+                                    _raw_ET * self.hydrodata['ET multiplier']
 
     def update(self):
         """
@@ -321,10 +334,17 @@ class Buckets(object):
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         return Qi
 
-    def evapotranspirationChang2019(self, Tmax, Tmin, photoperiod):
+    def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
+                                                    photoperiod = None):
         """
         Modified daily Thorntwaite Equation
         """
+        if Tmax is None:
+            Tmax = self.hydrodata['Maximum Temperature [C]']
+        if Tmin is None:
+            Tmin = self.hydrodata['Maximum Temperature [C]']
+        if photoperiod is None:
+            photoperiod = self.hydrodata['Photoperiod [hr]']
 
         Teff = 0.5 * 0.69 * (3*Tmax - Tmin)
         C = photoperiod/360.
@@ -332,7 +352,7 @@ class Buckets(object):
         # Simple and inefficient logical implementation
         # Is this ET or PET?
         # I will add/subtract from the top reservoir only.
-        self.ET = C*(-415.85 + 32.24*Teff - 0.43*Teff**2) * (Teff >= 26) \
+        return C*(-415.85 + 32.24*Teff - 0.43*Teff**2) * (Teff >= 26) \
                    + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
                      * (Teff > 0) * (Teff < 26)
 
