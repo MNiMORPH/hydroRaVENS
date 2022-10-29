@@ -134,10 +134,7 @@ class Buckets(object):
     """
 
     def __init__(self):
-        self.rain = None
-        self.ET = None
-
-        # Evapotranspiration
+        # Evapotranspiration constants
         self.Chang_I = 41.47044637
         self.Chang_a_i = 6.75E-7*self.Chang_I**3 \
                          - 7.72E-5*self.Chang_I**2 \
@@ -349,21 +346,10 @@ class Buckets(object):
                    + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
                      * (Teff > 0) * (Teff < 26)
 
-    def run(self, rain=None, ET_flag=False, Tmean_flag=False):
+    def run(self, Tmean_flag=False):
         # SET UP VARIABLES
         self.Q = [] # discharge
         self.SWE = [] # snowpack
-        if rain is not None:
-            if self.rain is not None:
-                print("Warning: overwriting existing rainfall time series.")
-            self.set_rainfall_time_series(rain)
-        if self.rain is None:
-            sys.exit("Please set the rainfall time series")
-        if ET_flag:
-            ET = self.ET
-        else:
-            warnings.warn("Warning: neglecting evapotranspiration.")
-            ET = np.zeros(self.rain.shape)
         if Tmean_flag:
             Tmean = self.Tmean
         else:
