@@ -219,8 +219,15 @@ class Buckets(object):
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
 
-        # Instantiate snowpack
-        self.snowpack = Snowpack() # allow changes to melt factor later
+        # Check if there is a mean temperature column for snowpack.
+        # If not, note that no snowpack processes will be included
+        if 'Mean Temperature [C]' in self.hydrodata.columns:
+            # Instantiate snowpack
+            self.snowpack = Snowpack() # allow changes to melt factor later
+        else:
+            warnings.warn('"Mean Temperature [C]" has not been set.'+
+                            'No snowpack processes will be simulated.')
+
         # Initial conditions if resuming from prior run
         self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
         # H0 in loop above.
@@ -304,15 +311,18 @@ class Buckets(object):
         FOR SOONER: WATER-YEAR BALANCE
         """
 
-        self.snowpack.set_temperature(T_at_timestep)
-        self.snowpack.recharge(recharge_at_timestep)
-        self.snowpack.discharge(self.dt)
-        Qi = self.snowpack.H_discharge
+        # If no mean temperature included, no snowpack processes simulated
+        if 'Mean Temperature [C]' in self.hydrodata.columns:
+            self.snowpack.set_temperature(T_at_timestep)
+            self.snowpack.recharge(recharge_at_timestep)
+            self.snowpack.discharge(self.dt)
+            Qi = self.snowpack.H_discharge
         # First, compute snowpack and direct discharge
         for i in range(0, len(self.reservoirs)):
             # Top layer is special: snowpack
             if i == 0:
-                self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
+                if 'Mean Temperature [C]' in self.hydrodata.columns:
+                    self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
             else:
                 self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
             self.reservoirs[i].discharge(self.dt)
@@ -346,17 +356,14 @@ class Buckets(object):
                    + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
                      * (Teff > 0) * (Teff < 26)
 
-    def run(self, Tmean_flag=False):
+    def run(self):
         # SET UP VARIABLES
+        # Note: update snowpack list -- likely to DataFrame
         self.Q = [] # discharge
         self.SWE = [] # snowpack
-        if Tmean_flag:
-            Tmean = self.Tmean
-        else:
-            print("Warning: neglecting snowpack")
-            Tmean = np.ones(self.rain.shape) # >0 for no snowpack
         # RUN
         for ti in range(len(self.rain)):
+            # Note: Update this after update() is updated :)
             Qi = self.update(rain[ti], ET[ti], Tmean[ti])
             self.Q.append(Qi)
             self.SWE.append(self.snowpack.Hwater)
