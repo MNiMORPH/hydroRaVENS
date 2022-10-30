@@ -117,10 +117,10 @@ class Snowpack(object):
         """
         if self.T > 0:
             dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
-            self.H_infiltrated += dH_melt * 1.
+            self.H_infiltrated += dH_melt * 0.5
         else:
             dH_melt = 0
-        self.H_discharge = dH_melt * 0.
+        self.H_discharge = dH_melt * 0.5
         self.Hwater -= dH_melt
 
 class Buckets(object):
