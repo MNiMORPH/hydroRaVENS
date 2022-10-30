@@ -239,8 +239,13 @@ class Buckets(object):
         else:
             raise ValueError("All time steps must be 1 day.")
 
+        # Compute specific discharge from data
+        self.hydrodata['Specific Discharge [mm/day]'] = \
+                self.hydrodata['Discharge [m^3/s]'] \
+                / (self.drainage_basin_area__km2*1E3) * 86400
+
         # Create columns for model output
-        self.hydrodata['Specific discharge (modeled) [mm/day]'] = pd.NA
+        self.hydrodata['Specific Discharge (modeled) [mm/day]'] = pd.NA
         self.hydrodata['Snowpack (modeled) [mm SWE]'] = pd.NA
 
         # Start out at first timestep
@@ -265,15 +270,11 @@ class Buckets(object):
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
         self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['Water Year']).mean()
-        # Specific discharge: m^3/s to mm/day
-        self.hydromeansWY['Specific discharge [mm/day]'] = \
-                            self.hydromeansWY['Discharge [m^3/s]'] / \
-                            (self.drainage_basin_area__km2*1E3) * 86400
-        # maybe not needed
+        # Not needed, but no real harm in calculating
         self.hydromeansWY['Runoff ratio'] = \
-                            self.hydromeansWY['Specific discharge [mm/day]'] / \
+                            self.hydromeansWY['Specific Discharge [mm/day]'] / \
                             self.hydromeansWY['Precipitation [mm/day]']
-        _ET_required = - ( self.hydromeansWY['Specific discharge [mm/day]'] -
+        _ET_required = - ( self.hydromeansWY['Specific Discharge [mm/day]'] -
                             self.hydromeansWY['Precipitation [mm/day]'] )
         self.hydromeansWY['ET multiplier'] = _ET_required / \
                             self.hydromeansWY['Evapotranspiration [mm/day]']
@@ -354,8 +355,7 @@ class Buckets(object):
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         # No need to return value anymore; just place it in the data table directly
         # return Qi
-        print(qi)
-        self.hydrodata.at[time_step, 'Specific discharge (modeled) [mm/day]'] = qi
+        self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
         self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
 
     def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
@@ -400,11 +400,9 @@ class Buckets(object):
         plt.bar(self.hydrodata['Date'], height=self.hydrodata['Precipitation [mm/day]']/self.dt, width=1., align='center', label='Precipitation [mm/day]', linewidth=0, alpha=0.5)
         #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
         plt.twinx()
-        plt.plot(self.hydrodata['Date'], self.hydrodata['Discharge [m^3/s]']
-                            / (self.drainage_basin_area__km2*1E3) * 86400
-                            / self.dt, 'b',
-                            label='Specific discharge (data)', linewidth=2)
-        plt.plot(self.hydrodata['Date'], self.hydrodata['Specific discharge (modeled) [mm/day]'],
+        plt.plot(self.hydrodata['Date'], self.hydrodata['Specific Discharge [mm/day]'],
+                            'b', label='Specific discharge (data)', linewidth=2)
+        plt.plot(self.hydrodata['Date'], self.hydrodata['Specific Discharge (modeled) [mm/day]'],
                 'k', label='Specific discharge (model)', linewidth=2)
         plt.ylim(0, plt.ylim()[-1])
         plt.legend(fontsize=11)
@@ -412,7 +410,7 @@ class Buckets(object):
         plt.tight_layout()
         plt.show()
 
-    def computeNashSutcliffeEfficiency(self, Qdata):
+    def computeNashSutcliffeEfficiency(self):
         """
         Compute the NSE of the model outputs vs. a set of supplied data
         """
