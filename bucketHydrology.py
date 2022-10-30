@@ -410,7 +410,7 @@ class Buckets(object):
         plt.tight_layout()
         plt.show()
 
-    def computeNSE(self):
+    def computeNSE(self, verbose=False):
         """
         Compute the Nash-Sutcliffe Efficiency of measured vs. modeled
         specific discharge
@@ -429,3 +429,6 @@ class Buckets(object):
             print("Calculated with ", np.sum(1 - _realvalue), "no-data points")
 
         self.NSE = 1 - NSE_num / NSE_denom
+
+        if verbose:
+            print( "NSE:", self.NSE )

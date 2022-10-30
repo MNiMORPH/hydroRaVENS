@@ -12,8 +12,5 @@ self.compute_water_year()
 self.compute_ET_multiplier()
 self.compute_ET()
 self.run()
-
-self.computeNSE()
-print("NSE:", self.NSE)
-
+self.computeNSE(verbose=True)
 self.plot()
