@@ -239,6 +239,9 @@ class Buckets(object):
         else:
             raise ValueError("All time steps must be 1 day.")
 
+        # Create column for model output
+        self.hydrodata['Discharge (modeled) [m^3/s]'] = pd.NA
+
         # Start out at first timestep
         # Could modify this to pick up a run in the middle
         # Or start at the beginning of a water year
@@ -299,7 +302,7 @@ class Buckets(object):
         self.hydrodata['ET for model [mm/day]'] = \
                                     _raw_ET * self.hydrodata['ET multiplier']
 
-    def update(self):
+    def update(self, time_step = None):
         """
         Updates water flow for one time step (typically a day)
 
@@ -311,13 +314,24 @@ class Buckets(object):
         FOR SOONER: WATER-YEAR BALANCE
         """
 
+        # time_step sets the index of the row in the Pandas DataFrame
+        # that will be used to update, run, and store the outputs
+        if time_step is None:
+            time_step = self._timestep_i
+
         # If no mean temperature included, no snowpack processes simulated
         if 'Mean Temperature [C]' in self.hydrodata.columns:
-            self.snowpack.set_temperature(T_at_timestep)
-            self.snowpack.recharge(recharge_at_timestep)
+            self.snowpack.set_temperature(
+                    self.hydrodata['Mean Temperature [C]'][time_step] )
+            self.snowpack.recharge(
+                    self.hydrodata['Precipitation [mm/day]'][time_step] -
+                    self.hydrodata['ET for model [mm/day]'][time_step] )
             self.snowpack.discharge(self.dt)
             Qi = self.snowpack.H_discharge
-        # First, compute snowpack and direct discharge
+        else:
+            # Just declare variable at 0 if no snowpack processes
+            Qi = 0.
+        # First, compute snowpack (if being used) and direct discharge
         for i in range(0, len(self.reservoirs)):
             # Top layer is special: snowpack
             if i == 0:
@@ -332,7 +346,12 @@ class Buckets(object):
         # per time step -- either down or out. This is quite schematic.
         for i in range(1, len(self.reservoirs)):
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
-        return Qi
+        # No need to return value anymore; just place it in the data table directly
+        # return Qi
+        self.hydrodata['Discharge (modeled) [m^3/s]', time_step] = Qi
+        # Advance internal variable if external time step is not selected
+        if time_step is None:
+            self._timestep_i += 1
 
     def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
                                                     photoperiod = None):
