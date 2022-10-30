@@ -414,9 +414,17 @@ class Buckets(object):
         """
         Compute the NSE of the model outputs vs. a set of supplied data
         """
-        _realvalue = np.isfinite(self.Q * Qdata)
-        NSE_num = np.sum( (self.Q[_realvalue] - Qdata[_realvalue])**2 )
-        NSE_denom = np.sum((Qdata[_realvalue] - np.mean(Qdata[_realvalue]))**2)
+
+        # Shorthand for fcn
+        q_data = self.hydrodata['Specific Discharge [mm/day]']
+        q_model = self.hydrodata['Specific Discharge (modeled) [mm/day]']
+
+        # Calculate NSE
+        _realvalue = ~q_model.isna() * ~q_data.isna()
+        NSE_num = np.sum( (q_model[_realvalue] - q_data[_realvalue])**2 )
+        NSE_denom = np.sum( (q_data[_realvalue] -
+                                    np.mean(q_data[_realvalue]))**2 )
         if np.sum(1 - _realvalue):
             print("Calculated with ", np.sum(1 - _realvalue), "no-data points")
+
         self.NSE = 1 - NSE_num / NSE_denom
