@@ -319,6 +319,10 @@ class Buckets(object):
         # that will be used to update, run, and store the outputs
         if time_step is None:
             time_step = self._timestep_i
+            # Advance internal variable if external time step is not selected
+            # This should be a different variable and therefore not
+            # modify the value of "time_step" by reference
+            self._timestep_i += 1
 
         # If no mean temperature included, no snowpack processes simulated
         if 'Mean Temperature [C]' in self.hydrodata.columns:
@@ -352,9 +356,6 @@ class Buckets(object):
         # return Qi
         self.hydrodata['Specific discharge (modeled) [mm/day]', time_step] = qi
         self.hydrodata['Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
-        # Advance internal variable if external time step is not selected
-        if time_step is None:
-            self._timestep_i += 1
 
     def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
                                                     photoperiod = None):
