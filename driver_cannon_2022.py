@@ -13,7 +13,7 @@ self.compute_ET_multiplier()
 self.compute_ET()
 self.run()
 
-self.computeNashSutcliffeEfficiency()
+self.computeNSE()
 print("NSE:", self.NSE)
 
 self.plot()

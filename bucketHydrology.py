@@ -410,9 +410,10 @@ class Buckets(object):
         plt.tight_layout()
         plt.show()
 
-    def computeNashSutcliffeEfficiency(self):
+    def computeNSE(self):
         """
-        Compute the NSE of the model outputs vs. a set of supplied data
+        Compute the Nash-Sutcliffe Efficiency of measured vs. modeled
+        specific discharge
         """
 
         # Shorthand for fcn
