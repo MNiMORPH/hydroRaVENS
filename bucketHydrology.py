@@ -240,7 +240,8 @@ class Buckets(object):
             raise ValueError("All time steps must be 1 day.")
 
         # Create columns for model output
-        self.hydrodata['Specific discharge (modeled) [m^3/s]'] = pd.NA
+        self.hydrodata['Specific discharge (modeled) [mm/day]'] = pd.NA
+        self.hydrodata['Snowpack (modeled) [mm SWE]'] = pd.NA
 
         # Start out at first timestep
         # Could modify this to pick up a run in the middle
@@ -349,7 +350,7 @@ class Buckets(object):
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         # No need to return value anymore; just place it in the data table directly
         # return Qi
-        self.hydrodata['Specific discharge (modeled) [m^3/s]', time_step] = qi
+        self.hydrodata['Specific discharge (modeled) [mm/day]', time_step] = qi
         # Advance internal variable if external time step is not selected
         if time_step is None:
             self._timestep_i += 1
