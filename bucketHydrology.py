@@ -354,8 +354,9 @@ class Buckets(object):
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         # No need to return value anymore; just place it in the data table directly
         # return Qi
-        self.hydrodata['Specific discharge (modeled) [mm/day]', time_step] = qi
-        self.hydrodata['Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
+        print(qi)
+        self.hydrodata.at[time_step, 'Specific discharge (modeled) [mm/day]'] = qi
+        self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
 
     def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
                                                     photoperiod = None):
