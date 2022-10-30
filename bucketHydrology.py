@@ -351,6 +351,7 @@ class Buckets(object):
         # No need to return value anymore; just place it in the data table directly
         # return Qi
         self.hydrodata['Specific discharge (modeled) [mm/day]', time_step] = qi
+        self.hydrodata['Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
         # Advance internal variable if external time step is not selected
         if time_step is None:
             self._timestep_i += 1
@@ -378,17 +379,8 @@ class Buckets(object):
                      * (Teff > 0) * (Teff < 26)
 
     def run(self):
-        # SET UP VARIABLES
-        # Note: update snowpack list -- likely to DataFrame
-        self.Q = [] # discharge
-        self.SWE = [] # snowpack
-        # RUN
-        for ti in range(len(self.rain)):
-            # Note: Update this after update() is updated :)
-            Qi = self.update(rain[ti], ET[ti], Tmean[ti])
-            self.Q.append(Qi)
-            self.SWE.append(self.snowpack.Hwater)
-        self.Q = np.array(self.Q)
+        for ti in self.hydrodata.index:
+            self.update()
 
     def plot(self, Qdata=None):
         """
