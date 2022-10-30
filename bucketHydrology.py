@@ -397,14 +397,15 @@ class Buckets(object):
         #    tick.set_rotation(45)
         plt.xticks(rotation=45, horizontalalignment='right')
         plt.ylabel('[mm/day]', fontsize=14)
-        plt.bar(self.time, height=self.rain/self.dt, width=1., align='center', label='Rainfall', linewidth=0, alpha=0.5)
+        plt.bar(self.hydrodata['Date'], height=self.hydrodata['Precipitation [mm/day]']/self.dt, width=1., align='center', label='Precipitation [mm/day]', linewidth=0, alpha=0.5)
         #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
         plt.twinx()
-        if Qdata is not None:
-            plt.plot(self.time, Qdata/self.dt, 'b',
-                    label='Unit discharge data', linewidth=2)
-        plt.plot(self.time, self.Q/self.dt, 'k',
-                label='Unit discharge model', linewidth=2)
+        plt.plot(self.hydrodata['Date'], self.hydrodata['Discharge [m^3/s]']
+                            / (self.drainage_basin_area__km2*1E3) * 86400
+                            / self.dt, 'b',
+                            label='Specific discharge (data)', linewidth=2)
+        plt.plot(self.hydrodata['Date'], self.hydrodata['Specific discharge (modeled) [mm/day]'],
+                'k', label='Specific discharge (model)', linewidth=2)
         plt.ylim(0, plt.ylim()[-1])
         plt.legend(fontsize=11)
         plt.ylabel('[mm/day]', fontsize=14)
