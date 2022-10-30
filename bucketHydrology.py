@@ -239,8 +239,8 @@ class Buckets(object):
         else:
             raise ValueError("All time steps must be 1 day.")
 
-        # Create column for model output
-        self.hydrodata['Discharge (modeled) [m^3/s]'] = pd.NA
+        # Create columns for model output
+        self.hydrodata['Specific discharge (modeled) [m^3/s]'] = pd.NA
 
         # Start out at first timestep
         # Could modify this to pick up a run in the middle
@@ -327,10 +327,11 @@ class Buckets(object):
                     self.hydrodata['Precipitation [mm/day]'][time_step] -
                     self.hydrodata['ET for model [mm/day]'][time_step] )
             self.snowpack.discharge(self.dt)
-            Qi = self.snowpack.H_discharge
+            # Specific discharge from snowpack
+            qi = self.snowpack.H_discharge
         else:
             # Just declare variable at 0 if no snowpack processes
-            Qi = 0.
+            qi = 0.
         # First, compute snowpack (if being used) and direct discharge
         for i in range(0, len(self.reservoirs)):
             # Top layer is special: snowpack
@@ -340,7 +341,7 @@ class Buckets(object):
             else:
                 self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
             self.reservoirs[i].discharge(self.dt)
-            Qi += self.reservoirs[i].H_discharge
+            qi += self.reservoirs[i].H_discharge
         # Then passs infiltrated water downwards
         # Using this as a separate step so the water can take only one step
         # per time step -- either down or out. This is quite schematic.
@@ -348,7 +349,7 @@ class Buckets(object):
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         # No need to return value anymore; just place it in the data table directly
         # return Qi
-        self.hydrodata['Discharge (modeled) [m^3/s]', time_step] = Qi
+        self.hydrodata['Specific discharge (modeled) [m^3/s]', time_step] = qi
         # Advance internal variable if external time step is not selected
         if time_step is None:
             self._timestep_i += 1
