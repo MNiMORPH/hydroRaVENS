@@ -57,27 +57,26 @@ class Reservoir(object):
         Recharge can be positive (precipitation) or negative
         (evapotranspiration)
         """
-        excess = 0.
+        self.excess = 0.
         if self.Hwater < 0:
             # Allowing ET in top layer only.
-            self.excess_ET_error += self.Hwater
+            self.excess_ET_error += self.Hwater # Not needed?
             self.excess += self.Hwater
             self.Hwater = 0 # ! SUBSTANTIAL LOSS OF MASS!!!!!!!!
                             # Possibly fixed with addition of excess here
         elif self.Hwater+H <= self.Hmax:
             self.Hwater += H
         elif self.Hwater+H > self.Hmax:
-            excess = self.Hwater+H - self.Hmax
+            self.excess += self.Hwater+H - self.Hmax
             self.Hwater = self.Hmax
-        self.excess += excess
 
+    # Split exfiltration and discharge re: self.excess?
     def discharge(self, dt):
         dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
         self.H_exfiltrated = dH * self.f_to_discharge
         self.H_discharge = self.excess + self.H_exfiltrated
         self.H_infiltrated = dH * (1 - self.f_to_discharge)
         self.Hwater -= dH
-        self.excess = 0.
 
 class Snowpack(object):
 
@@ -347,7 +346,7 @@ class Buckets(object):
             qi = 0.
         # First, compute snowpack (if being used) and direct discharge
         for i in range(0, len(self.reservoirs)):
-            # Top layer is special: snowpack
+            # Top layer is special: snowpack infiltrates immediately
             if i == 0:
                 if 'Mean Temperature [C]' in self.hydrodata.columns:
                     self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
