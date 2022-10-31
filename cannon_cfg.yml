@@ -16,9 +16,10 @@ timeseries:
         datafile: CannonTestInput.csv
 
 initial_conditions:
+        # Initial guesses
         water_reservoir_effective_depths__m:
-                - 0
-                - 0
+                - 2
+                - 400
         snowpack__m_SWE: 0
 
 catchment:
@@ -44,7 +45,7 @@ general:
 reservoirs:
         e_folding_residence_times__days:
                 - 16
-                - 3000
+                - 2000
         exfiltration_fractions:
                 - 0.8
                 - 1.0
