@@ -146,14 +146,15 @@ class Snowpack(object):
 
     def discharge(self, dt):
         """
-        Currently, sends all snowmelt to the top layer for discharge.
+        Currently, sends all snowmelt to the top layer for infiltration.
         This is arbitrary and neglects melt atop frozen soil.
+        Maybe the name of the function should be updated.
         """
         if self.T > 0:
             dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
-            self.H_infiltrated += dH_melt * 1.
         else:
             dH_melt = 0
+        self.H_infiltrated += dH_melt * 1.
         self.H_discharge = dH_melt * 0.
         self.Hwater -= dH_melt
 
