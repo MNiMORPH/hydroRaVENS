@@ -399,6 +399,12 @@ class Buckets(object):
                         self.H_deficit
                     )
             else:
+                # Let water infiltrate to lower layers effectively
+                # instantaneously; this isn't quite realistic, but
+                # should be a simpler approach for parameter calibration
+                # (Plus, this is just the water that did exit that above
+                # container, which is already free to discharge, so this
+                # seems more self-consistent.)
                 # The amount of infiltrated water from above could be
                 # negative; this represents ET in excess of what the
                 # unsaturated zone ("soil zone"; top reservoir) holds.
@@ -416,13 +422,7 @@ class Buckets(object):
         # And then we have to deal wtih this in the next round
         # If 0, great. If not 0, passes on
         self.H_deficit = self.reservoirs[i].H_deficit
-        # DOUBLE-COUNTING???? CHECK!!!! BUT BUDGET BALANCED?!
-        # Then passs infiltrated water downwards
-        # Using this as a separate step so the water can take only one step
-        # per time step -- either down or out. This is quite schematic.
-        for i in range(1, len(self.reservoirs)):
-            # This might be cleaner if performed in the Reservoir class
-            self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
+
         # No need to return value anymore; just place it in the data table directly
         # return Qi
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
