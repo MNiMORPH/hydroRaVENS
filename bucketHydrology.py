@@ -107,14 +107,28 @@ class Snowpack(object):
         If T <= 0, all recharge to snowpack
         Else, recharge magically bypasses snowpack
         """
-        if self.T <= 0:
-            self.Hwater += H
-            self.H_infiltrated = 0.
+
+        self.H_discharge = 0.
+        # If positive recharge
+        if H >= 0:
+            if self.T <= 0:
+                self.Hwater += H
+                self.H_infiltrated = 0.
+            else:
+                # Incoming precip component; melt sums with this
+                # This is then directly passed to the first layer of the
+                # set of hydrological reservoirs
+                self.H_infiltrated = H
+        # If negative recharge, take from snowpack, and then discharge
         else:
-            # Incoming precip component; melt sums with this
-            # This is then directly passed to the first layer of the
-            # set of hydrological reservoirs
-            self.H_infiltrated = H
+            # Submimation (effectively) if snow present;
+            # Otherwise negative discharge
+            if self.Hwater > -H:
+                self.Hwater += H
+            else:
+                self.H_discharge += H + self.Hwater
+                self.Hwater = 0
+            self.H_infiltrated = 0.
 
     def discharge(self, dt):
         """
@@ -126,7 +140,7 @@ class Snowpack(object):
             self.H_infiltrated += dH_melt * 1.
         else:
             dH_melt = 0
-        self.H_discharge = dH_melt * 0.
+        self.H_discharge += dH_melt * 0.
         self.Hwater -= dH_melt
 
 class Buckets(object):
