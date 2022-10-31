@@ -108,19 +108,21 @@ class Snowpack(object):
             self.H_infiltrated = 0.
         else:
             # Incoming precip component; melt sums with this
+            # This is then directly passed to the first layer of the
+            # set of hydrological reservoirs
             self.H_infiltrated = H
 
     def discharge(self, dt):
         """
-        Currently, 50/50 snowmelt split between infiltration and discharge.
-        This is arbitrary.
+        Currently, sends all snowmelt to the top layer for discharge.
+        This is arbitrary and neglects melt atop frozen soil.
         """
         if self.T > 0:
             dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
-            self.H_infiltrated += dH_melt * 0.5
+            self.H_infiltrated += dH_melt * 1.
         else:
             dH_melt = 0
-        self.H_discharge = dH_melt * 0.5
+        self.H_discharge = dH_melt * 0.
         self.Hwater -= dH_melt
 
 class Buckets(object):
@@ -344,6 +346,11 @@ class Buckets(object):
             if i == 0:
                 if 'Mean Temperature [C]' in self.hydrodata.columns:
                     self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
+                else:
+                    self.reservoirs[i].recharge(
+                        self.hydrodata['Precipitation [mm/day]'][time_step] -
+                        self.hydrodata['ET for model [mm/day]'][time_step]
+                    )
             else:
                 self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
             self.reservoirs[i].discharge(self.dt)
