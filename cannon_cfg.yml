@@ -36,14 +36,15 @@ general:
         # This must be true for now; all time steps the same
         # And all should be 1 day
         scalar_dt: true
+        spin_up_cycles: 1
 
 # Reservoirs are conceptual water stores, and are organized from top
 # (nearest Earth's surface) to bottom; this is important for
 # infiltration/seepage from one layer to another one that is lower.
 reservoirs:
         e_folding_residence_times__days:
-                - 15
-                - 60
+                - 10
+                - 3000
         exfiltration_fractions:
                 - 0.8
                 - 1.0
