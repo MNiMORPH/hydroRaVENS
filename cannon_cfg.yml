@@ -43,7 +43,7 @@ general:
 # infiltration/seepage from one layer to another one that is lower.
 reservoirs:
         e_folding_residence_times__days:
-                - 10
+                - 16
                 - 3000
         exfiltration_fractions:
                 - 0.8
@@ -54,4 +54,4 @@ reservoirs:
 
 snowmelt:
         # mm SWE per positive degC day
-        PDD_melt_factor: 0.5
+        PDD_melt_factor: 1.
