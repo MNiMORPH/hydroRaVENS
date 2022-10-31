@@ -251,6 +251,7 @@ class Buckets(object):
                 / (self.drainage_basin_area__km2*1E3) * 86400
 
         # Create columns for model output
+        # But not needed here -- don't have for subsurface storage !!!!!
         self.hydrodata['Specific Discharge (modeled) [mm/day]'] = pd.NA
         self.hydrodata['Snowpack (modeled) [mm SWE]'] = pd.NA
 
@@ -368,6 +369,8 @@ class Buckets(object):
         # return Qi
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
         self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
+        self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = \
+                                np.sum([res.Hwater for res in self.reservoirs])
 
     def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
                                                     photoperiod = None):
@@ -420,6 +423,26 @@ class Buckets(object):
         plt.ylabel('[mm/day]', fontsize=14)
         plt.tight_layout()
         plt.show()
+
+    def check_mass_balance(self, time_step=None):
+        """
+        Add up balance components in mm
+        """
+        # Additions equals discharge out; set up this way, and can check.
+        total_additions = \
+            self.hydrodata['Precipitation [mm/day]'][:time_step+1].sum() \
+            - self.hydrodata['ET for model [mm/day]'][:time_step+1].sum()
+        # Storage reservoirs
+        snow_storage = self.hydrodata['Snowpack (modeled) [mm SWE]'][time_step]
+        subsurface_storage = self.hydrodata['Subsurface storage (modeled total) [mm]'][time_step]
+        # Mass removal
+        outlet_discharge = self.hydrodata['Specific Discharge (modeled) [mm/day]'][:time_step+1].sum()
+
+        # Discrepancy
+        excess_mass_in_model = outlet_discharge + subsurface_storage \
+                                + snow_storage - total_additions
+
+        return excess_mass_in_model
 
     def computeNSE(self, verbose=False):
         """
