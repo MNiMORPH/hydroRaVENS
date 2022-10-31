@@ -416,7 +416,6 @@ class Buckets(object):
         # And then we have to deal wtih this in the next round
         # If 0, great. If not 0, passes on
         self.H_deficit = self.reservoirs[i].H_deficit
-        print (self. H_deficit )
         # DOUBLE-COUNTING???? CHECK!!!! BUT BUDGET BALANCED?!
         # Then passs infiltrated water downwards
         # Using this as a separate step so the water can take only one step
@@ -496,10 +495,12 @@ class Buckets(object):
         subsurface_storage = self.hydrodata['Subsurface storage (modeled total) [mm]'][time_step]
         # Mass removal
         outlet_discharge = self.hydrodata['Specific Discharge (modeled) [mm/day]'][:time_step+1].sum()
+        # Carried-over water deficit
+        deficit = self.H_deficit
 
         # Discrepancy
         excess_mass_in_model = outlet_discharge + subsurface_storage \
-                                + snow_storage - total_additions
+                                + snow_storage - total_additions + deficit
 
         return excess_mass_in_model
 
