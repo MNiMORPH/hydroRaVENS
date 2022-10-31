@@ -16,10 +16,6 @@ self.run() #Spin-up
 self._timestep_i = 0. # Restart
 self.run() #Spin-up
 self._timestep_i = 0. # Restart
-self.run() #Spin-up
-self._timestep_i = 0. # Restart
-self.run() #Spin-up
-self._timestep_i = 0. # Restart
 self.run()
 self.computeNSE(verbose=True)
 self.plot()
