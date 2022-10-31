@@ -1,0 +1,53 @@
+# config.yml
+# Test configuration
+# A Wickert, 23 Oct 2022
+
+# Should timeseries have no subcategories?
+timeseries:
+        # Columns:
+        #   - Date
+        #   - Precipitation [mm/day]
+        #   - Discharge [m^3/s]
+        #   - Mean Temperature [C]
+        #   - Minimum Temperature [C]
+        #   - Maximum Temperature [C]
+        #   - Photoperiod [hr]
+        #   - Evaptranspiration [mm/day]    <-- OPTIONAL
+        datafile: CannonTestInput.csv
+
+initial_conditions:
+        water_reservoir_effective_depths__m:
+                - 0
+        snowpack__m_SWE: 0
+
+catchment:
+        drainage_basin_area__km2: 3800
+        # ET options are:
+        #   - ThorntwaiteChang2019
+        #   - datafile
+        # The former is calculated from temperature.
+        # The latter is input directly in the "datafile"
+        evapotranspiration_method: datafile
+        # USGS water year starts in October
+        water_year_start_month: 10
+
+general:
+        # This must be true for now; all time steps the same
+        # And all should be 1 day
+        scalar_dt: true
+        spin_up_cycles: 1
+
+# Reservoirs are conceptual water stores, and are organized from top
+# (nearest Earth's surface) to bottom; this is important for
+# infiltration/seepage from one layer to another one that is lower.
+reservoirs:
+        e_folding_residence_times__days:
+                - 20
+        exfiltration_fractions:
+                - 1.0
+        maximum_effective_depths__m:
+                - .inf
+
+snowmelt:
+        # mm SWE per positive degC day
+        PDD_melt_factor: 0.5
