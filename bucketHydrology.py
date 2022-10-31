@@ -54,27 +54,38 @@ class Reservoir(object):
 
     def recharge(self, H):
         """
-        Recharge can be positive (precipitation) or negative
-        (evapotranspiration)
+        Recharge can be positive (precipitation > evapotranspiration) or
+        negative (evapotranspiration > precipitation)
         """
-        self.excess = 0.
-        if self.Hwater < 0:
-            # Allowing ET in top layer only.
-            self.excess_ET_error += self.Hwater # Not needed?
-            self.excess += self.Hwater
-            self.Hwater = 0 # ! SUBSTANTIAL LOSS OF MASS!!!!!!!!
-                            # Possibly fixed with addition of excess here
-        elif self.Hwater+H <= self.Hmax:
-            self.Hwater += H
-        elif self.Hwater+H > self.Hmax:
-            self.excess += self.Hwater+H - self.Hmax
-            self.Hwater = self.Hmax
+        self.H_excess = 0. # Extra water above a maximum cap
+        self.H_deficit = 0. # Water that this layer cannot hold and
+                            # cannot be passed on to a deeper layer
 
-    # Split exfiltration and discharge re: self.excess?
+        # ERROR if water is less than 0 -- may be able to remove
+        # this check later
+        if self.Hwater < 0:
+            raise ValueError("Hwater in reservoir < 0; non-physical")
+
+        # What if more water is lost during "recharge" than exists in reservoir?
+        # Create a deficit and bring Hwater to 0
+        if self.Hwater+H < 0:
+            self.H_deficit += self.Hwater+H # inefficient
+            self.Hwater = 0
+        # What if more water is added than maximum reservoir capacity?
+        # Mark excess (straight to runoff) and bring Hwater to Hmax
+        elif self.Hwater+H > self.Hmax:
+            self.H_excess += self.Hwater+H - self.Hmax
+            self.Hwater = self.Hmax
+        # Otherwise, we're in a range in which 0 <= H <= Hmax
+        # Yay! Things are easier!
+        else:
+            self.Hwater += H
+
+    # Split exfiltration and discharge re: self.H_excess?
     def discharge(self, dt):
         dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
         self.H_exfiltrated = dH * self.f_to_discharge
-        self.H_discharge = self.excess + self.H_exfiltrated
+        self.H_discharge = self.H_excess + self.H_exfiltrated
         self.H_infiltrated = dH * (1 - self.f_to_discharge)
         self.Hwater -= dH
 
@@ -108,7 +119,7 @@ class Snowpack(object):
         Else, recharge magically bypasses snowpack
         """
 
-        self.H_discharge = 0.
+        self.H_deficit = 0. # Water deficit with neg ET; just this time step
         # If positive recharge
         if H >= 0:
             if self.T <= 0:
@@ -119,14 +130,17 @@ class Snowpack(object):
                 # This is then directly passed to the first layer of the
                 # set of hydrological reservoirs
                 self.H_infiltrated = H
-        # If negative recharge, take from snowpack, and then discharge
+        # If negative recharge, take from snowpack, and then from reservoirs
+        # in order from top to bottom. If no water is in the bottom reservoir,
+        # this deficit will be handled first, but will not produce discharge
+
         else:
             # Submimation (effectively) if snow present;
-            # Otherwise negative discharge
+            # Otherwise pass water deficit
             if self.Hwater > -H:
                 self.Hwater += H
             else:
-                self.H_discharge += H + self.Hwater
+                self.H_deficit += H + self.Hwater
                 self.Hwater = 0
             self.H_infiltrated = 0.
 
@@ -140,7 +154,7 @@ class Snowpack(object):
             self.H_infiltrated += dH_melt * 1.
         else:
             dH_melt = 0
-        self.H_discharge += dH_melt * 0.
+        self.H_discharge = dH_melt * 0.
         self.Hwater -= dH_melt
 
 class Buckets(object):
@@ -275,6 +289,12 @@ class Buckets(object):
         # for example
         self._timestep_i = self.hydrodata.index[0]
 
+        # If there is a water-supply deficit (ET > P) that is larger than
+        # any existing water reservoirs, note this in this variable.
+        # Important: This is the cumulative H_deficit, whereas
+        # class Snowpack's H_deficit is for that time step only.
+        self.H_deficit = 0.
+
     def compute_water_year(self):
         """
         Adds a "water year" column to the Pandas DataFrame
@@ -350,34 +370,59 @@ class Buckets(object):
         if 'Mean Temperature [C]' in self.hydrodata.columns:
             self.snowpack.set_temperature(
                     self.hydrodata['Mean Temperature [C]'][time_step] )
+            # Recharge P - ET + running deficit (neg if deficit exists)
             self.snowpack.recharge(
                     self.hydrodata['Precipitation [mm/day]'][time_step] -
-                    self.hydrodata['ET for model [mm/day]'][time_step] )
+                    self.hydrodata['ET for model [mm/day]'][time_step]
+                    + self.H_deficit)
             self.snowpack.discharge(self.dt)
             # Specific discharge from snowpack
             qi = self.snowpack.H_discharge
+            # An existing deficit will cause H_deficit to be negative
+            # H_deficit is updated based on snowpack processes
+            self.H_deficit = self.snowpack.H_deficit
         else:
             # Just declare variable at 0 if no snowpack processes
             qi = 0.
         # First, compute snowpack (if being used) and direct discharge
         for i in range(0, len(self.reservoirs)):
-            # Top layer is special: snowpack infiltrates immediately
+            # Top layer is special: snowmelt and/or precip infiltrates
+            # immediately (at least on our daily time scales)
             if i == 0:
                 if 'Mean Temperature [C]' in self.hydrodata.columns:
-                    self.reservoirs[i].recharge(self.snowpack.H_infiltrated)
+                    self.reservoirs[i].recharge(self.snowpack.H_infiltrated
+                                                + self.H_deficit)
                 else:
                     self.reservoirs[i].recharge(
                         self.hydrodata['Precipitation [mm/day]'][time_step] -
-                        self.hydrodata['ET for model [mm/day]'][time_step]
+                        self.hydrodata['ET for model [mm/day]'][time_step] +
+                        self.H_deficit
                     )
             else:
-                self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated)
+                # The amount of infiltrated water from above could be
+                # negative; this represents ET in excess of what the
+                # unsaturated zone ("soil zone"; top reservoir) holds.
+                # Deeper loss of water could be due to plants tapping into
+                # groundwater, direct lake evaporation, etc. -- or related
+                # to this model not being physical or distributed, so just
+                # needing to balance mass.
+                self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated
+                                    + self.reservoirs[i-1].H_deficit)
             self.reservoirs[i].discharge(self.dt)
             qi += self.reservoirs[i].H_discharge
+        # At the bottom of the heap, if a deficit still exists, then
+        # note this the running water budget
+        # (Just add: Is 0 unless )
+        # And then we have to deal wtih this in the next round
+        # If 0, great. If not 0, passes on
+        self.H_deficit = self.reservoirs[i].H_deficit
+        print (self. H_deficit )
+        # DOUBLE-COUNTING???? CHECK!!!! BUT BUDGET BALANCED?!
         # Then passs infiltrated water downwards
         # Using this as a separate step so the water can take only one step
         # per time step -- either down or out. This is quite schematic.
         for i in range(1, len(self.reservoirs)):
+            # This might be cleaner if performed in the Reservoir class
             self.reservoirs[i].Hwater += self.reservoirs[i-1].H_infiltrated
         # No need to return value anymore; just place it in the data table directly
         # return Qi
