@@ -80,7 +80,7 @@ class Reservoir(object):
 
 class Snowpack(object):
 
-    def __init__(self, melt_factor=0.5):
+    def __init__(self, melt_factor=None):
         """
         A unique reservoir type that adds and removes water based on
         temperature.
@@ -243,7 +243,7 @@ class Buckets(object):
         # If not, note that no snowpack processes will be included
         if 'Mean Temperature [C]' in self.hydrodata.columns:
             # Instantiate snowpack
-            self.snowpack = Snowpack() # allow changes to melt factor later
+            self.snowpack = Snowpack(self.melt_factor) # allow changes to melt factor later
         else:
             warnings.warn('"Mean Temperature [C]" has not been set.'+
                             'No snowpack processes will be simulated.')
