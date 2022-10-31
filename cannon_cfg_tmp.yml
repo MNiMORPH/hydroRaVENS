@@ -50,4 +50,4 @@ reservoirs:
 
 snowmelt:
         # mm SWE per positive degC day
-        PDD_melt_factor: 0.5
+        PDD_melt_factor: 1.
