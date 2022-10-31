@@ -36,6 +36,8 @@ class Reservoir(object):
         self.Hout = np.nan
         self.f_to_discharge = f_to_discharge
 
+        self.excess_ET_error = 0.
+
         # Check values and note whether they are reasonable
         if t_efold < 0:
             raise ValueError("Negative t_efold nonsensical.")
@@ -58,7 +60,10 @@ class Reservoir(object):
         excess = 0.
         if self.Hwater < 0:
             # Allowing ET in top layer only.
-            self.Hwater = 0
+            self.excess_ET_error += self.Hwater
+            self.excess += self.Hwater
+            self.Hwater = 0 # ! SUBSTANTIAL LOSS OF MASS!!!!!!!!
+                            # Possibly fixed with addition of excess here
         elif self.Hwater+H <= self.Hmax:
             self.Hwater += H
         elif self.Hwater+H > self.Hmax:
@@ -198,13 +203,13 @@ class Buckets(object):
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
         self.reservoirs = [
-                Reservoir(
+            Reservoir(
                 t_efold = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
                 f_to_discharge = self.cfg['reservoirs']['exfiltration_fractions'][i],
                 Hmax = self.cfg['reservoirs']['maximum_effective_depths__m'][i],
                 H0 = self.cfg['initial_conditions']['water_reservoir_effective_depths__m'][i]
-                )
-                for i in range(self.n_reservoirs)]
+            )
+            for i in range(self.n_reservoirs)]
         # Python note: This is a compact way of a loop and using append()
 
         # Check if bottom reservoir discharges all to river: conserve mass.
