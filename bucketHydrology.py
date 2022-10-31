@@ -186,12 +186,12 @@ class Buckets(object):
             len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m']):
                 pass
             else:
-                raise ValueError(_key + 'within "reservoirs" contains a\n'+
+                raise ValueError(_key + ' within "reservoirs" contains a\n'+
                                  'different number of entries, implying'+
                                  'a different number of subsurface water\n'+
                                  'reservoirs, than '+
                                  'water_reservoir_effective_depths__m'+
-                                 'within "initial_conditions".')
+                                 ' within "initial_conditions".')
 
         # If all are the same length, then we will assign a number of reservoirs
         self.n_reservoirs = len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m'])
