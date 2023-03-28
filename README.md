@@ -1,5 +1,7 @@
 [![DOI](https://zenodo.org/badge/199317220.svg)](https://zenodo.org/badge/latestdoi/199317220)
 
 
-# bucket-hydrology
+# :eight_pointed_black_star: RaVENS
+Rain and Variable Evapotranspiration, Nieve, and Streamflow
+
 Simple reservoir-based hydrological model
