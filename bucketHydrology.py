@@ -279,6 +279,10 @@ class Buckets(object):
                 self.hydrodata['Discharge [m^3/s]'] \
                 / (self.drainage_basin_area__km2*1E3) * 86400
 
+#        hydrodata['Specific Discharge [mm/day]'] = \
+#                hydrodata['Discharge [m^3/s]'] \
+#                / (drainage_basin_area__km2*1E3) * 86400
+
         # Create columns for model output
         # But not needed here -- don't have for subsurface storage !!!!!
         self.hydrodata['Specific Discharge (modeled) [mm/day]'] = pd.NA
@@ -470,12 +474,17 @@ class Buckets(object):
         #    tick.set_rotation(45)
         plt.xticks(rotation=45, horizontalalignment='right')
         plt.ylabel('[mm/day]', fontsize=14)
-        plt.bar(self.hydrodata['Date'], height=self.hydrodata['Precipitation [mm/day]']/self.dt, width=1., align='center', label='Precipitation [mm/day]', linewidth=0, alpha=0.5)
+        plt.bar(self.hydrodata['Date'].values,
+                height=self.hydrodata['Precipitation [mm/day]'].values/self.dt,
+                width=1., align='center', label='Precipitation [mm/day]',
+                linewidth=0, alpha=0.5)
         #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
         plt.twinx()
-        plt.plot(self.hydrodata['Date'], self.hydrodata['Specific Discharge [mm/day]'],
-                            'b', label='Specific discharge (data)', linewidth=2)
-        plt.plot(self.hydrodata['Date'], self.hydrodata['Specific Discharge (modeled) [mm/day]'],
+        plt.plot(self.hydrodata['Date'].values,
+                      self.hydrodata['Specific Discharge [mm/day]'].values,
+                      'b', label='Specific discharge (data)', linewidth=2)
+        plt.plot(self.hydrodata['Date'].values,
+                self.hydrodata['Specific Discharge (modeled) [mm/day]'].values,
                 'k', label='Specific discharge (model)', linewidth=2)
         plt.ylim(0, plt.ylim()[-1])
         plt.legend(fontsize=11)
