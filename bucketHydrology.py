@@ -463,7 +463,7 @@ class Buckets(object):
 
     def plot(self, Qdata=None):
         """
-        Plot rainfall and discharge.
+        Plot precipitation and discharge.
         Optionally pass specific discharge data to plot this as well.
         """
         fig = plt.figure()
@@ -473,11 +473,12 @@ class Buckets(object):
         #for tick in ax.get_xticklabels():
         #    tick.set_rotation(45)
         plt.xticks(rotation=45, horizontalalignment='right')
-        plt.ylabel('[mm/day]', fontsize=14)
+        plt.ylabel('Precipitation [mm/day]', fontsize=14)
         plt.bar(self.hydrodata['Date'].values,
                 height=self.hydrodata['Precipitation [mm/day]'].values/self.dt,
                 width=1., align='center', label='Precipitation [mm/day]',
                 linewidth=0, alpha=0.5)
+        plt.legend(fontsize=11)
         #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
         plt.twinx()
         plt.plot(self.hydrodata['Date'].values,
@@ -488,7 +489,7 @@ class Buckets(object):
                 'k', label='Specific discharge (model)', linewidth=2)
         plt.ylim(0, plt.ylim()[-1])
         plt.legend(fontsize=11)
-        plt.ylabel('[mm/day]', fontsize=14)
+        plt.ylabel('Specific Discharge [mm/day]', fontsize=14)
         plt.tight_layout()
         plt.show()
 
