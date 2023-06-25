@@ -461,10 +461,9 @@ class Buckets(object):
         for ti in self.hydrodata.index:
             self.update()
 
-    def plot(self, Qdata=None):
+    def plot(self):
         """
-        Plot precipitation and discharge.
-        Optionally pass specific discharge data to plot this as well.
+        Plot precipitation and specific discharge (data and modeled).
         """
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
