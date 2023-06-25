@@ -1,7 +1,9 @@
 # Started by A. Wickert
 # 25 July 2019
-# Updated by J. Jones
-# Starting 08 Oct 2019
+# Updated slightly by J. Jones
+# 08 Oct 2019
+# Significant Update by A. Wickert
+# October 2022
 
 import numpy as np
 from matplotlib import pyplot as plt
