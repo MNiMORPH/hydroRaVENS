@@ -2,8 +2,8 @@
 
 # driver_cannon_2022.py
 
-import bucketHydrology
-b = bucketHydrology.Buckets()
+import hydroravens
+b = hydroravens.Buckets()
 b.initialize('cannon_cfg.yml')
 
 # To lump into internal functions later but test here for now
