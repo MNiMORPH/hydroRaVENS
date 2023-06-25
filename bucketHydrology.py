@@ -475,21 +475,19 @@ class Buckets(object):
                 height=self.hydrodata['Precipitation [mm/day]'].values/self.dt,
                 width=1., align='center', label='Precipitation [mm/day]',
                 linewidth=0, color='C0', alpha=0.5) # C0 is the default bar-plot color
-        plt.tight_layout()
         ax2 = plt.twinx()
         plt.plot(self.hydrodata['Date'].values,
                       self.hydrodata['Specific Discharge [mm/day]'].values,
-                      'b', label='Data', linewidth=2)
+                      'royalblue', label='Data', linewidth=2, alpha=0.8)
         plt.plot(self.hydrodata['Date'].values,
                 self.hydrodata['Specific Discharge (modeled) [mm/day]'].values,
-                'k', label='Model', linewidth=2)
+                'k', label='Model', linewidth=2, alpha=0.8)
         plt.ylim(0, plt.ylim()[-1])
         plt.tight_layout()
         plt.legend(title='Specific Discharge', fontsize=11, title_fontsize=11, labelcolor='linecolor')
         plt.ylabel('Specific Discharge [mm/day]', fontsize=14, color='0.3')
         plt.tight_layout()
         plt.show()
-
 
     def check_mass_balance(self, time_step=None):
         """
