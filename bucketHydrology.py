@@ -470,16 +470,12 @@ class Buckets(object):
         ax = fig.add_subplot(1,1,1)
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%y-%m-%d'))
         plt.xlabel('Date', fontsize=14)
-        #for tick in ax.get_xticklabels():
-        #    tick.set_rotation(45)
         plt.xticks(rotation=45, horizontalalignment='right')
         plt.ylabel('Precipitation [mm/day]', fontsize=14, color='C0')
         plt.bar(self.hydrodata['Date'].values,
                 height=self.hydrodata['Precipitation [mm/day]'].values/self.dt,
                 width=1., align='center', label='Precipitation [mm/day]',
                 linewidth=0, color='C0', alpha=0.5) # C0 is the default bar-plot color
-        #plt.legend(fontsize=11)
-        #plt.plot(self.time, self.rain/self.dt, 'b-', label='Rainfall', alpha=0.5)
         plt.tight_layout()
         ax2 = plt.twinx()
         plt.plot(self.hydrodata['Date'].values,
