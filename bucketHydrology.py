@@ -493,52 +493,8 @@ class Buckets(object):
         plt.legend(title='Specific Discharge', fontsize=11, title_fontsize=11, labelcolor='linecolor')
         plt.ylabel('Specific Discharge [mm/day]', fontsize=14, color='0.3')
         plt.tight_layout()
-        #self.multicolor_ylabel(ax2, 
-        #        ('Specific Discharge [mm/day]:', 'Data,', 'Model'),
-        #        ('.5', 'k', 'b'), size=14, weight='roman')
-        #self.multicolor_ylabel(ax2, 
-        #        ('Specific Discharge [mm/day]:', 'Data,'),
-        #        ('.5', 'k'), size=14, weight='roman')
-
-        strings = ['Specific Discharge [mm/day]:', 'Data,', 'Model']
-        colors = ['.5', 'k', 'b']
-        # Multicolored axis labels
-        for s, c in zip(strings, colors):
-            ax2.text(1.1, 0, s + " ", color=c, transform=ax2.transData, fontsize=14)
-
-            """
-            # Need to draw to update the text position.
-            text.draw(canvas.get_renderer())
-            ex = text.get_window_extent()
-            # Convert window extent from pixels to inches
-            # to avoid issues displaying at different dpi
-            ex = fig.dpi_scale_trans.inverted().transform_bbox(ex)
-            t = text.get_transform() + \
-                offset_copy(Affine2D(), fig=fig, x=0, y=ex.height)
-            """
         plt.show()
 
-    def multicolor_ylabel(self,ax,list_of_strings,list_of_colors,anchorpad=0,**kw):
-        # From
-        # https://stackoverflow.com/questions/33159134/matplotlib-y-axis-label-with-multiple-colors
-        """
-        this function creates y-axis labels with multiple colors
-        ax specifies the axes object where the labels should be drawn
-        list_of_strings is a list of all of the text items
-        list_if_colors is a corresponding list of colors for the strings
-        """
-        from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, \
-                                         HPacker, VPacker
-        boxes = [TextArea(text, textprops=dict(color=color, ha='left',
-                  va='top',rotation=90,**kw))
-                  for text,color in zip(list_of_strings, list_of_colors) ]
-        ybox = HPacker(children=boxes,align="center", pad=0, sep=0)
-        anchored_ybox = AnchoredOffsetbox(loc=3, child=ybox, pad=anchorpad,
-                                            frameon=False,
-                                            bbox_to_anchor=(1.1, 0.5), 
-                                            bbox_transform=ax.transAxes,
-                                            borderpad=0.)
-        ax.add_artist(anchored_ybox)
 
     def check_mass_balance(self, time_step=None):
         """
