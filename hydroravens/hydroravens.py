@@ -503,6 +503,14 @@ class Buckets(object):
         for ti in self.hydrodata.index:
             self.update()
 
+    def finalize(self):
+        # Goodness of fit
+        # Add options to print and/or save values later
+        self.computeNSE(verbose=True)
+        # Plot
+        # Add flag for poting (or not) later
+        self.plot()
+
     def plot(self):
         """
         Plot precipitation and specific discharge (data and modeled).
@@ -595,10 +603,10 @@ def main():
     import hydroravens
 
     b = hydroravens.Buckets()
+    
     b.initialize(args.configfile)
     b.run()
-    b.computeNSE(verbose=True)
-    b.plot()
+    b.finalize()
 
 
 ################
