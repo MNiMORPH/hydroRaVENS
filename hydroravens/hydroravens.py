@@ -310,6 +310,10 @@ class Buckets(object):
         # Important: This is the cumulative H_deficit, whereas
         # class Snowpack's H_deficit is for that time step only.
         self.H_deficit = 0.
+        
+        # Compute the water years based on the input month for
+        # water-year rollover
+        self.compute_water_year()
 
     def compute_water_year(self):
         """
@@ -567,7 +571,6 @@ def main():
     b.initialize(args.configfile)
     
     # Eventually relate many of these to options in the YAML
-    b.compute_water_year()
     b.compute_ET_multiplier()
     b.compute_ET()
     for i in range(2):
