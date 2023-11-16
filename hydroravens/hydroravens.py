@@ -314,6 +314,14 @@ class Buckets(object):
         # Compute the water years based on the input month for
         # water-year rollover
         self.compute_water_year()
+        
+        # Scale evapotranspiration to enable water balance
+        # We use this because ET estimates usually have much mroe
+        # error than discharge, but may in the future want a way to
+        # disable it.
+        self.compute_ET_multiplier()
+        self.compute_ET()
+
 
     def compute_water_year(self):
         """
@@ -571,8 +579,6 @@ def main():
     b.initialize(args.configfile)
     
     # Eventually relate many of these to options in the YAML
-    b.compute_ET_multiplier()
-    b.compute_ET()
     for i in range(2):
         b.run() #Spin-up
         b._timestep_i = 0. # Restart
