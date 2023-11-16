@@ -272,7 +272,7 @@ class Buckets(object):
         self.et_method = self.cfg['catchment']['evapotranspiration_method']
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
-
+        
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
         if 'Mean Temperature [C]' in self.hydrodata.columns:
@@ -281,6 +281,10 @@ class Buckets(object):
         else:
             warnings.warn('"Mean Temperature [C]" has not been set.'+
                             'No snowpack processes will be simulated.')
+
+        # How many times to loop the full time series for the spin-up
+        # Maybe I should permit a more sophisticated spin-up at some point!
+        self.n_spin_up_cycles = self.cfg['general']['spin_up_cycles']
 
         # Initial conditions if resuming from prior run
         self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
@@ -329,6 +333,13 @@ class Buckets(object):
         # disable it.
         self.compute_ET_multiplier()
         self.compute_ET()
+        
+        # Model spin-up, if requested
+        for i in range(self.n_spin_up_cycles):
+            self.run() #Spin-up
+            # Later allow user-selected starting and ending time steps
+            # For now, just the whole series
+            self._timestep_i = 0. # Restart
 
 
     def compute_water_year(self):
@@ -585,11 +596,6 @@ def main():
 
     b = hydroravens.Buckets()
     b.initialize(args.configfile)
-    
-    # Eventually relate many of these to options in the YAML
-    for i in range(2):
-        b.run() #Spin-up
-        b._timestep_i = 0. # Restart
     b.run()
     b.computeNSE(verbose=True)
     b.plot()
