@@ -1,3 +1,5 @@
+#! /usr/bin/python3
+
 # Started by A. Wickert
 # 25 July 2019
 # Updated slightly by J. Jones
@@ -12,6 +14,7 @@ import matplotlib.dates as mdates
 import sys
 import warnings
 import yaml
+import argparse
 
 class Reservoir(object):
     """
@@ -206,9 +209,15 @@ class Buckets(object):
             warnings.warn("No configuration file provided; all values needed "+
                           "for a model run therefore must be set indpendently.")
 
-        # Import yml configuration file
-        with open(config_file, "r") as ymlfile:
-            self.cfg = yaml.load(ymlfile, Loader=yaml.FullLoader)
+        # Parse YAML configuration file
+        # And assign variables except for optimization bounds and plotting
+        if config_file is not None:
+            try:
+                with open(config_file, "r") as yamlfile:
+                    self.cfg = yaml.load(yamlfile, Loader=yaml.FullLoader)
+            except:
+                print("\nCould not read from", config_file, "\n")
+                sys.exit(2)
 
         # Import dataframe from yml
         self.hydrodata = pd.read_csv(self.cfg['timeseries']['datafile'],
@@ -513,10 +522,11 @@ class Buckets(object):
 
         return excess_mass_in_model
 
-    def computeNSE(self, verbose=False):
+    def computeNSE(self, _return=True, verbose=False):
         """
         Compute the Nash-Sutcliffe Efficiency of measured vs. modeled
         specific discharge
+        By default, returns this value
         """
 
         # Shorthand for fcn
@@ -535,3 +545,44 @@ class Buckets(object):
 
         if verbose:
             print( "NSE:", self.NSE )
+            
+        if _return:
+            return(self.NSE)
+            
+
+def main():
+    parser = argparse.ArgumentParser( description=
+              'Pass the configuration file path to run hydroRaVENS.'
+              )
+    parser.add_argument('-y', '--configfile', type=str,
+                            help='YAML file from which all inputs are read.')
+
+    # Parse args if anything is passed.
+    # If nothing is passed, then print help and exit.
+    args = parser.parse_args(args=None if sys.argv[1:] else ['--help'])
+
+    import hydroravens
+
+    b = hydroravens.Buckets()
+    b.initialize(args.configfile)
+    
+    # Eventually relate many of these to options in the YAML
+    b.compute_water_year()
+    b.compute_ET_multiplier()
+    b.compute_ET()
+    for i in range(2):
+        b.run() #Spin-up
+        b._timestep_i = 0. # Restart
+    b.run()
+    b.computeNSE(verbose=True)
+    b.plot()
+
+
+################
+# ACCESS POINT #
+################
+
+if __name__ == "__main__":
+    main()
+
+
