@@ -104,17 +104,19 @@ class Reservoir(object):
         self.Hwater -= dH
 
 class Snowpack(object):
+    """
+    Snowpack reservoir driven by temperature.
+
+    Accumulates precipitation as snow when mean temperature is at or below
+    0 °C. Melts at a positive-degree-day rate when temperature is above 0 °C.
+    All melt is routed to the top subsurface reservoir as infiltration; direct
+    discharge to the river is not modeled.
+
+    Should precede the subsurface reservoir list in a watershed model.
+    The melt factor is a positive-degree-day factor [mm/°C/day].
+    """
 
     def __init__(self, melt_factor=None):
-        """
-        A unique reservoir type that adds and removes water based on
-        temperature.
-
-        If included in a list of reservoirs within a watershed model,
-        should always be on top.
-
-        The melt factor is given as a positive-degree-day factor [mm/day melt]
-        """
         self.Hwater = 0. # SWE
         self.melt_factor = melt_factor
         self.T = 0.
@@ -225,6 +227,11 @@ class Buckets(object):
         ----------
         I : float
             Thermal index, as returned by _compute_Chang_I.
+
+        Returns
+        -------
+        a : float
+            Thornthwaite exponent (dimensionless).
         """
         return (6.75e-7 * I**3
                 - 7.71e-5 * I**2
@@ -240,11 +247,23 @@ class Buckets(object):
 
     def initialize(self, config_file=None):
         """
-        Part of CSDMS BMI
+        Set up the model from a YAML configuration file.
+
+        Reads the configuration file, loads the input time series, builds
+        the reservoir stack, instantiates snowpack if temperature data are
+        present, computes the water-year ET multiplier, and runs any
+        requested spin-up cycles. Part of the CSDMS Basic Model Interface.
+
+        Parameters
+        ----------
+        config_file : str, optional
+            Path to the YAML configuration file. If None, all required
+            values must be set on the object directly before calling
+            update().
         """
         if config_file is None:
             warnings.warn("No configuration file provided; all values needed "+
-                          "for a model run therefore must be set indpendently.")
+                          "for a model run therefore must be set independently.")
 
         # Parse YAML configuration file
         # And assign variables except for optimization bounds and plotting
