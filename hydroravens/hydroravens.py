@@ -51,9 +51,17 @@ class Reservoir(object):
 
         self.excess_ET_error = 0.
 
+        # Initialized here so all instance attributes exist before
+        # recharge() and discharge() are first called
+        self.H_excess = 0.
+        self.H_deficit = 0.
+        self.H_exfiltrated = 0.
+        self.H_infiltrated = 0.
+        self.H_discharge = 0.
+
         # Check values and note whether they are reasonable
-        if t_efold < 0:
-            raise ValueError("Negative t_efold nonsensical.")
+        if t_efold <= 0:
+            raise ValueError("t_efold must be > 0.")
         if f_to_discharge < 0:
             raise ValueError("Negative f_to_discharge not possible")
         elif f_to_discharge > 1:
@@ -116,6 +124,10 @@ class Snowpack(object):
         """
         self.Hwater = 0. # SWE
         self.melt_factor = melt_factor
+        self.T = 0.
+        self.H_infiltrated = 0.
+        self.H_discharge = 0.
+        self.H_deficit = 0.
 
     def set_melt_factor(self, melt_factor):
         """
@@ -382,7 +394,7 @@ class Buckets(object):
             self.run() #Spin-up
             # Later allow user-selected starting and ending time steps
             # For now, just the whole series
-            self._timestep_i = 0. # Restart
+            self._timestep_i = self.hydrodata.index[0]  # Restart
 
 
     def compute_water_year(self):
@@ -400,7 +412,7 @@ class Buckets(object):
         """
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
-        self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['Water Year']).mean()
+        self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['Water Year']).mean(numeric_only=True)
         # Not needed, but no real harm in calculating
         self.hydromeansWY['Runoff ratio'] = \
                             self.hydromeansWY['Specific Discharge [mm/day]'] / \
@@ -511,12 +523,13 @@ class Buckets(object):
         # (Just add: Is 0 unless )
         # And then we have to deal wtih this in the next round
         # If 0, great. If not 0, passes on
-        self.H_deficit = self.reservoirs[i].H_deficit
+        self.H_deficit = self.reservoirs[-1].H_deficit
 
         # No need to return value anymore; just place it in the data table directly
         # return Qi
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
-        self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
+        if 'Mean Temperature [C]' in self.hydrodata.columns:
+            self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
         self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = \
                                 np.sum([res.Hwater for res in self.reservoirs])
 
@@ -609,6 +622,8 @@ class Buckets(object):
         """
         Add up balance components in mm
         """
+        if time_step is None:
+            time_step = self.hydrodata.index[-1]
         # Additions equals discharge out; set up this way, and can check.
         total_additions = \
             self.hydrodata['Precipitation [mm/day]'][:time_step+1].sum() \
