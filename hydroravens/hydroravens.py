@@ -271,8 +271,11 @@ class Buckets(object):
             try:
                 with open(config_file, "r") as yamlfile:
                     self.cfg = yaml.load(yamlfile, Loader=yaml.FullLoader)
-            except:
-                print("\nCould not read from", config_file, "\n")
+            except FileNotFoundError:
+                print("\nConfig file not found:", config_file, "\n")
+                sys.exit(2)
+            except yaml.YAMLError as e:
+                print("\nCould not parse config file:", config_file, "\n", e)
                 sys.exit(2)
 
         # Import dataframe from yml
@@ -342,7 +345,8 @@ class Buckets(object):
         self.n_spin_up_cycles = self.cfg['general']['spin_up_cycles']
 
         # Initial conditions if resuming from prior run
-        self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
+        if self.has_snowpack:
+            self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
         # H0 in loop above.
 
         # Check that dt is 1 day everywhere.
@@ -360,6 +364,7 @@ class Buckets(object):
         # Create columns for model output
         self.hydrodata['Specific Discharge (modeled) [mm/day]'] = pd.NA
         self.hydrodata['Snowpack (modeled) [mm SWE]'] = pd.NA
+        self.hydrodata['Subsurface storage (modeled total) [mm]'] = pd.NA
 
         # Start out at first timestep
         # Could modify this to pick up a run in the middle
@@ -579,7 +584,7 @@ class Buckets(object):
         # Add options to print and/or save values later
         self.computeNSE(verbose=True)
         # Plot
-        # Add flag for poting (or not) later
+        # Add flag for plotting (or not) later
         self.plot()
 
     def plot(self):
