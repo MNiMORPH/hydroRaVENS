@@ -31,8 +31,6 @@ class Reservoir(object):
     proportional to the amount of water held in the reservoir.
     """
 
-    import numpy as np
-
     def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf, H0=0.):
         """
         t_efold: e-folding time for reservoir depletion (same units as time
@@ -174,8 +172,8 @@ class Snowpack(object):
             dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
         else:
             dH_melt = 0
-        self.H_infiltrated += dH_melt * 1.
-        self.H_discharge = dH_melt * 0.
+        self.H_infiltrated += dH_melt
+        self.H_discharge = 0.
         self.Hwater -= dH_melt
 
 class Buckets(object):
@@ -238,10 +236,7 @@ class Buckets(object):
         Export the list of water depths, for reinitialization
         (e.g., to start after a spin-up phase or to restart a paused model run)
         """
-        Hlist = []
-        for reservoir in self.reservoirs:
-            Hlist.append( reservoir.Hwater )
-        return Hlist
+        return [reservoir.Hwater for reservoir in self.reservoirs]
 
     def initialize(self, config_file=None):
         """
@@ -315,7 +310,8 @@ class Buckets(object):
         
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
-        if 'Mean Temperature [C]' in self.hydrodata.columns:
+        self.has_snowpack = 'Mean Temperature [C]' in self.hydrodata.columns
+        if self.has_snowpack:
             # Instantiate snowpack
             self.snowpack = Snowpack(self.melt_factor) # allow changes to melt factor later
         else:
@@ -448,7 +444,7 @@ class Buckets(object):
             self._timestep_i += 1
 
         # If no mean temperature included, no snowpack processes simulated
-        if 'Mean Temperature [C]' in self.hydrodata.columns:
+        if self.has_snowpack:
             self.snowpack.set_temperature(
                     self.hydrodata['Mean Temperature [C]'][time_step] )
             # Recharge P - ET + running deficit (neg if deficit exists)
@@ -466,11 +462,11 @@ class Buckets(object):
             # Just declare variable at 0 if no snowpack processes
             qi = 0.
         # First, compute snowpack (if being used) and direct discharge
-        for i in range(0, len(self.reservoirs)):
+        for i in range(len(self.reservoirs)):
             # Top layer is special: snowmelt and/or precip infiltrates
             # immediately (at least on our daily time scales)
             if i == 0:
-                if 'Mean Temperature [C]' in self.hydrodata.columns:
+                if self.has_snowpack:
                     self.reservoirs[i].recharge(self.snowpack.H_infiltrated
                                                 + self.H_deficit)
                 else:
@@ -505,7 +501,7 @@ class Buckets(object):
         self.H_deficit = self.reservoirs[-1].H_deficit
 
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
-        if 'Mean Temperature [C]' in self.hydrodata.columns:
+        if self.has_snowpack:
             self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
         self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = \
                                 np.sum([res.Hwater for res in self.reservoirs])
@@ -631,20 +627,20 @@ class Buckets(object):
         q_model = self.hydrodata['Specific Discharge (modeled) [mm/day]']
 
         # Calculate NSE
-        _realvalue = ~q_model.isna() * ~q_data.isna()
+        _realvalue = ~q_model.isna() & ~q_data.isna()
         NSE_num = np.sum( (q_model[_realvalue] - q_data[_realvalue])**2 )
         NSE_denom = np.sum( (q_data[_realvalue] -
                                     np.mean(q_data[_realvalue]))**2 )
-        if np.sum(1 - _realvalue):
-            print("Calculated with ", np.sum(1 - _realvalue), "no-data points")
+        if np.sum(~_realvalue):
+            print("Calculated with ", np.sum(~_realvalue), "no-data points")
 
         self.NSE = 1 - NSE_num / NSE_denom
 
         if verbose:
             print( "NSE:", self.NSE )
-            
+
         if _return:
-            return(self.NSE)
+            return self.NSE
             
 
 def main():
