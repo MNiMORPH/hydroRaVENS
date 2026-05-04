@@ -65,7 +65,7 @@ class Reservoir(object):
         elif f_to_discharge == 0:
             warnings.warn("All water infiltrates when f_to_discharge is 0:"+
                           " you may have created a\n"+
-                          "redudnant pass-through water-storage layer")
+                          "redundant pass-through water-storage layer")
         if Hmax < 0:
             raise ValueError("Hmax must be >= 0 (and >0 makes more sense)")
 
@@ -156,7 +156,7 @@ class Snowpack(object):
         # this deficit will be handled first, but will not produce discharge
 
         else:
-            # Submimation (effectively) if snow present;
+            # Sublimation (effectively) if snow present;
             # Otherwise pass water deficit
             if self.Hwater > -H:
                 self.Hwater += H
@@ -181,8 +181,8 @@ class Snowpack(object):
 
 class Buckets(object):
     """
-    Incorportates a list of reservoirs into a linear hierarchy that sends water
-    either downwards our out to the surface.
+    Incorporates a list of reservoirs into a linear hierarchy that sends water
+    either downwards or out to the surface.
 
     reservoir_list: list of subsurface layers in order from top to bottom
                     (surface to deep groundwater)
@@ -365,7 +365,7 @@ class Buckets(object):
         self.compute_water_year()
         
         # Scale evapotranspiration to enable water balance
-        # We use this because ET estimates usually have much mroe
+        # We use this because ET estimates usually have much more
         # error than discharge, but may in the future want a way to
         # disable it.
         self.compute_ET_multiplier()

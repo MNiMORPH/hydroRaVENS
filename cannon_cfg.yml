@@ -12,7 +12,7 @@ timeseries:
         #   - Minimum Temperature [C]
         #   - Maximum Temperature [C]
         #   - Photoperiod [hr]
-        #   - Evaptranspiration [mm/day]    <-- OPTIONAL
+        #   - Evapotranspiration [mm/day]    <-- OPTIONAL
         datafile: CannonTestInput.csv
 
 initial_conditions:
