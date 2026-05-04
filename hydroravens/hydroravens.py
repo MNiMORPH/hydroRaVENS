@@ -45,11 +45,7 @@ class Reservoir(object):
         self.Hwater = H0
         self.Hmax = Hmax
         self.t_efold = t_efold
-        self.excess = 0.
-        self.Hout = np.nan
         self.f_to_discharge = f_to_discharge
-
-        self.excess_ET_error = 0.
 
         # Initialized here so all instance attributes exist before
         # recharge() and discharge() are first called
@@ -238,16 +234,6 @@ class Buckets(object):
                 + 1.7912e-2 * I
                 + 0.49239)
 
-    def set_rainfall_time_series(self, rain):
-        self.rain = np.array(rain)
-
-    def set_mean_temperature(self, T):
-        """
-        Mean temperature each time step for the temperature-index approch to
-        basic snowpack modeling
-        """
-        self.Tmean = np.array(T)
-
     def export_Hlist(self):
         """
         Export the list of water depths, for reinitialization
@@ -356,10 +342,6 @@ class Buckets(object):
         self.hydrodata['Specific Discharge [mm/day]'] = \
                 self.hydrodata['Discharge [m^3/s]'] \
                 / (self.drainage_basin_area__km2*1E3) * 86400
-
-#        hydrodata['Specific Discharge [mm/day]'] = \
-#                hydrodata['Discharge [m^3/s]'] \
-#                / (drainage_basin_area__km2*1E3) * 86400
 
         # Create columns for model output
         # But not needed here -- don't have for subsurface storage !!!!!
@@ -525,8 +507,6 @@ class Buckets(object):
         # If 0, great. If not 0, passes on
         self.H_deficit = self.reservoirs[-1].H_deficit
 
-        # No need to return value anymore; just place it in the data table directly
-        # return Qi
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
         if 'Mean Temperature [C]' in self.hydrodata.columns:
             self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
@@ -681,20 +661,11 @@ def main():
     # If nothing is passed, then print help and exit.
     args = parser.parse_args(args=None if sys.argv[1:] else ['--help'])
 
-    import hydroravens
-
-    b = hydroravens.Buckets()
-    
+    b = Buckets()
     b.initialize(args.configfile)
     b.run()
     b.finalize()
 
 
-################
-# ACCESS POINT #
-################
-
 if __name__ == "__main__":
     main()
-
-
