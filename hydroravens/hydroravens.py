@@ -97,6 +97,14 @@ class Reservoir(object):
             self.Hwater += H
 
     def discharge(self, dt):
+        """
+        Discharge water from the reservoir over time step dt.
+
+        Computes the amount of water lost via exponential decay, then splits
+        it between direct discharge to the river (H_exfiltrated) and
+        infiltration to the next-deeper reservoir (H_infiltrated). Excess
+        from recharge() is added to H_discharge.
+        """
         dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
         self.H_exfiltrated = dH * self.f_to_discharge
         self.H_discharge = self.H_excess + self.H_exfiltrated
@@ -181,11 +189,9 @@ class Snowpack(object):
 class Buckets(object):
     """
     Incorporates a list of reservoirs into a linear hierarchy that sends water
-    either downwards or out to the surface.
-
-    reservoir_list: list of subsurface layers in order from top to bottom
-                    (surface to deep groundwater)
-
+    either downwards or out to the surface. Reservoirs are ordered from top
+    (nearest Earth's surface) to bottom (deepest groundwater); this order
+    controls the direction of infiltration between layers.
     """
 
     def __init__(self, T_monthly_normals=None):
@@ -337,7 +343,7 @@ class Buckets(object):
             # Instantiate snowpack
             self.snowpack = Snowpack(self.melt_factor) # allow changes to melt factor later
         else:
-            warnings.warn('"Mean Temperature [C]" has not been set.'+
+            warnings.warn('"Mean Temperature [C]" has not been set. '+
                             'No snowpack processes will be simulated.')
 
         # How many times to loop the full time series for the spin-up
@@ -351,7 +357,7 @@ class Buckets(object):
 
         # Check that dt is 1 day everywhere.
         # Do not work otherwise.
-        if (self.hydrodata['Date'].diff()[1:] == pd.Timedelta('1 day') ).all():
+        if (self.hydrodata['Date'].diff()[1:] == pd.Timedelta('1 day')).all():
             self.dt = 1.
         else:
             raise ValueError("All time steps must be 1 day.")
@@ -576,10 +582,14 @@ class Buckets(object):
         return ET0
 
     def run(self):
-        for ti in self.hydrodata.index:
+        for _ in self.hydrodata.index:
             self.update()
 
     def finalize(self):
+        """
+        Compute model skill and produce output plots. Part of the CSDMS
+        Basic Model Interface.
+        """
         # Goodness of fit
         # Add options to print and/or save values later
         self.computeNSE(verbose=True)
@@ -609,7 +619,6 @@ class Buckets(object):
                 self.hydrodata['Specific Discharge (modeled) [mm/day]'].values,
                 'k', label='Model', linewidth=2, alpha=0.8)
         plt.ylim(0, plt.ylim()[-1])
-        plt.tight_layout()
         plt.legend(title='Specific Discharge', fontsize=11, title_fontsize=11, labelcolor='linecolor')
         plt.ylabel('Specific Discharge [mm/day]', fontsize=14, color='0.3')
         plt.tight_layout()
@@ -656,7 +665,7 @@ class Buckets(object):
         NSE_denom = np.sum( (q_data[_realvalue] -
                                     np.mean(q_data[_realvalue]))**2 )
         if np.sum(~_realvalue):
-            print("Calculated with ", np.sum(~_realvalue), "no-data points")
+            print("Excluded", np.sum(~_realvalue), "no-data points from NSE calculation")
 
         self.NSE = 1 - NSE_num / NSE_denom
 
