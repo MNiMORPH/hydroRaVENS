@@ -485,7 +485,7 @@ class Buckets(object):
         if Tmax is None:
             Tmax = self.hydrodata['Maximum Temperature [C]']
         if Tmin is None:
-            Tmin = self.hydrodata['Maximum Temperature [C]']
+            Tmin = self.hydrodata['Minimum Temperature [C]']
         if photoperiod is None:
             photoperiod = self.hydrodata['Photoperiod [hr]']
 
