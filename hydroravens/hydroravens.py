@@ -86,7 +86,7 @@ class Reservoir(object):
         # What if more water is lost during "recharge" than exists in reservoir?
         # Create a deficit and bring Hwater to 0
         if self.Hwater+H < 0:
-            self.H_deficit += self.Hwater+H # inefficient
+            self.H_deficit += self.Hwater+H
             self.Hwater = 0
         # What if more water is added than maximum reservoir capacity?
         # Mark excess (straight to runoff) and bring Hwater to Hmax
@@ -98,7 +98,6 @@ class Reservoir(object):
         else:
             self.Hwater += H
 
-    # Split exfiltration and discharge re: self.H_excess?
     def discharge(self, dt):
         dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
         self.H_exfiltrated = dH * self.f_to_discharge
@@ -344,7 +343,6 @@ class Buckets(object):
                 / (self.drainage_basin_area__km2*1E3) * 86400
 
         # Create columns for model output
-        # But not needed here -- don't have for subsurface storage !!!!!
         self.hydrodata['Specific Discharge (modeled) [mm/day]'] = pd.NA
         self.hydrodata['Snowpack (modeled) [mm SWE]'] = pd.NA
 
@@ -412,7 +410,6 @@ class Buckets(object):
         1. Initial ET (provided or from Thorntwaite)
         2. Modifying this over a water year to enforce water balance
         """
-        # Nonfunctional update in progress
         if self.et_method == 'datafile':
             _raw_ET = self.hydrodata['Evapotranspiration [mm/day]']
         elif self.et_method == 'ThorntwaiteChang2019':
