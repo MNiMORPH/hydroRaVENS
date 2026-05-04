@@ -634,8 +634,9 @@ class Buckets(object):
         total_additions = \
             self.hydrodata['Precipitation [mm/day]'][:time_step+1].sum() \
             - self.hydrodata['ET for model [mm/day]'][:time_step+1].sum()
-        # Storage reservoirs
-        snow_storage = self.hydrodata['Snowpack (modeled) [mm SWE]'][time_step]
+        # Storage reservoirs; snowpack is 0 when not simulated
+        snow_storage = (self.hydrodata['Snowpack (modeled) [mm SWE]'][time_step]
+                        if self.has_snowpack else 0.)
         subsurface_storage = self.hydrodata['Subsurface storage (modeled total) [mm]'][time_step]
         # Mass removal
         outlet_discharge = self.hydrodata['Specific Discharge (modeled) [mm/day]'][:time_step+1].sum()
