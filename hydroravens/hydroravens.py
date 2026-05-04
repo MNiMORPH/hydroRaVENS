@@ -181,13 +181,50 @@ class Buckets(object):
 
     """
 
-    def __init__(self):
-        # Evapotranspiration constants
-        self.Chang_I = 41.47044637
-        self.Chang_a_i = 6.75E-7*self.Chang_I**3 \
-                         - 7.72E-5*self.Chang_I**2 \
-                         + 1.7912E-2*self.Chang_I \
-                         + 0.49239
+    def __init__(self, T_monthly_normals=None):
+        # Thornthwaite thermal index and exponent, per Chang et al. (2019)
+        # https://doi.org/10.1002/ird.2309
+        # I is climatologically imposed by the local normal temperature regime
+        # and must remain fixed during simulation (not recomputed each timestep).
+        if T_monthly_normals is not None:
+            self.Chang_I = self._compute_Chang_I(T_monthly_normals)
+            self.Chang_a = self._compute_Chang_a(self.Chang_I)
+
+    def _compute_Chang_I(self, T_monthly_normals):
+        """
+        Compute the Thornthwaite thermal index I from long-term monthly normal
+        temperatures, per Chang et al. (2019), Eq. 1.
+        https://doi.org/10.1002/ird.2309
+
+        Parameters
+        ----------
+        T_monthly_normals : array-like, length 12
+            Long-term mean monthly temperatures (°C). Negative values are
+            treated as 0 per the Thornthwaite convention.
+
+        Returns
+        -------
+        I : float
+            Thermal index (dimensionless).
+        """
+        Tn = np.maximum(T_monthly_normals, 0)
+        return np.sum((0.2 * Tn) ** 1.514)
+
+    def _compute_Chang_a(self, I):
+        """
+        Compute the Thornthwaite exponent a from thermal index I, per
+        Chang et al. (2019), Eq. 1.
+        https://doi.org/10.1002/ird.2309
+
+        Parameters
+        ----------
+        I : float
+            Thermal index, as returned by _compute_Chang_I.
+        """
+        return (6.75e-7 * I**3
+                - 7.71e-5 * I**2
+                + 1.7912e-2 * I
+                + 0.49239)
 
     def set_rainfall_time_series(self, rain):
         self.rain = np.array(rain)
@@ -270,6 +307,12 @@ class Buckets(object):
         # Set scalar variables based on yaml
         self.melt_factor = self.cfg['snowmelt']['PDD_melt_factor']
         self.et_method = self.cfg['catchment']['evapotranspiration_method']
+        if self.et_method == 'ThorntwaiteChang2019' and not hasattr(self, 'Chang_I'):
+            raise ValueError(
+                'ThorntwaiteChang2019 requires long-term monthly temperature normals.\n'
+                'Pass T_monthly_normals (array of 12 monthly mean temperatures in °C)\n'
+                'to Buckets() before calling initialize().'
+            )
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
         
@@ -477,10 +520,32 @@ class Buckets(object):
         self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = \
                                 np.sum([res.Hwater for res in self.reservoirs])
 
-    def evapotranspirationChang2019(self, Tmax = None, Tmin = None,
-                                                    photoperiod = None):
+    def evapotranspirationChang2019(self, Tmax=None, Tmin=None, photoperiod=None,
+                                    k=0.69):
         """
-        Modified daily Thorntwaite Equation
+        Modified daily Thornthwaite ET₀ equation.
+
+        Chang et al. (2019), Eq. 1–4. https://doi.org/10.1002/ird.2309
+
+        Parameters
+        ----------
+        Tmax : array-like
+            Daily maximum temperature (°C).
+        Tmin : array-like
+            Daily minimum temperature (°C).
+        photoperiod : array-like
+            Photoperiod N (hours), computed from latitude and Julian day
+            per Allen et al. (1998), Eqs. 2–4 of Chang et al. (2019).
+        k : float
+            Calibration coefficient in the T_ef formula. Default 0.69,
+            recommended by Pereira & Pruitt (2004) for daily ET₀
+            (https://doi.org/10.1016/j.agrformet.2004.01.005).
+            Use 0.72 for monthly ET₀ per Camargo et al. (1999).
+
+        Returns
+        -------
+        ET0 : array-like
+            Daily reference evapotranspiration (mm day⁻¹).
         """
         if Tmax is None:
             Tmax = self.hydrodata['Maximum Temperature [C]']
@@ -489,15 +554,16 @@ class Buckets(object):
         if photoperiod is None:
             photoperiod = self.hydrodata['Photoperiod [hr]']
 
-        Teff = 0.5 * 0.69 * (3*Tmax - Tmin)
-        C = photoperiod/360.
+        Tef = 0.5 * k * (3 * Tmax - Tmin)
+        C = photoperiod / 360.
 
-        # Simple and inefficient logical implementation
-        # Is this ET or PET?
-        # I will add/subtract from the top reservoir only.
-        return C*(-415.85 + 32.24*Teff - 0.43*Teff**2) * (Teff >= 26) \
-                   + 16.*C * (10.*Teff / self.Chang_I)**self.Chang_a_i \
-                     * (Teff > 0) * (Teff < 26)
+        quadratic  = C * (-415.85 + 32.24 * Tef - 0.43 * Tef**2)
+        power_law  = 16. * C * (10. * Tef / self.Chang_I) ** self.Chang_a
+
+        ET0 = np.where(Tef > 26,  quadratic,
+              np.where(Tef > 0,   power_law,
+                                  0.))
+        return ET0
 
     def run(self):
         for ti in self.hydrodata.index:
