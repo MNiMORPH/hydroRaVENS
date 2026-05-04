@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="hydroRaVENS",
-    version="2.0.0",
+    version="2.1.0",
     author="Andrew D. Wickert",
     author_email="awickert@umn.edu",
     description="Rain and Variable Evapotranspiration, Nieve, and Streamflow",
