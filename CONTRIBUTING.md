@@ -26,9 +26,33 @@ Include a minimal reproducible example and your Python and package versions wher
 
 ## Code style
 
-- Follow [PEP 8](https://peps.python.org/pep-0008/). Use `pycodestyle --max-line-length=99` to check.
-- Write [NumPy-style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html) for all public methods.
-- Intentional PEP 8 exceptions in this codebase: E741 (single-letter scientific variables such as `I`), E221 (alignment spaces in assignments).
+This project follows [PEP 8](https://peps.python.org/pep-0008/) and the
+[CSDMS developer guidelines](https://csdms.colorado.edu/wiki/Development_best_practices),
+with the intentional exceptions listed below.
+
+You can check for unintentional style deviations with:
+```
+pycodestyle --max-line-length=99 hydroravens/
+```
+
+Write [NumPy-style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html)
+for all public methods.
+
+### Intentional PEP 8 exceptions
+
+| Code | Reason |
+|------|--------|
+| E741 | Single-letter scientific variables are permitted where conventional (e.g., `I` for the Thornthwaite thermal index). |
+| E221 | Extra spaces before `=` are allowed for vertical alignment of related assignments. |
+| E225 | Whitespace around `+` may be omitted inside multi-line string literals for readability. |
+| E251 | Spaces around `=` in keyword arguments are allowed when aligning a multi-line constructor call. |
+
+### CSDMS BMI interface
+
+The `Buckets` class implements the
+[CSDMS Basic Model Interface](https://bmi.readthedocs.io/).
+Changes to `initialize`, `update`, `run`, or `finalize` must preserve
+this interface contract.
 
 ## Contact
 
