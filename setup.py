@@ -16,6 +16,7 @@ setuptools.setup(
         'pandas',
         'numpy',
         'matplotlib',
+        'pyyaml',
         ],
     packages=setuptools.find_packages(),
     classifiers=[
