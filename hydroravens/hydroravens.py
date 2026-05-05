@@ -24,6 +24,7 @@ import warnings
 import yaml
 import argparse
 
+
 class Reservoir(object):
     """
     Generic reservoir. Accepts new water (recharge), and sends it to other
@@ -72,9 +73,10 @@ class Reservoir(object):
         Recharge can be positive (precipitation > evapotranspiration) or
         negative (evapotranspiration > precipitation)
         """
-        self.H_excess = 0. # Extra water above a maximum cap
-        self.H_deficit = 0. # Water that this layer cannot hold and
-                            # cannot be passed on to a deeper layer
+        # Extra water above a maximum cap
+        self.H_excess = 0.
+        # Water that this layer cannot hold and cannot be passed to a deeper layer
+        self.H_deficit = 0.
 
         # ERROR if water is less than 0 -- may be able to remove
         # this check later
@@ -111,6 +113,7 @@ class Reservoir(object):
         self.H_infiltrated = dH * (1 - self.f_to_discharge)
         self.Hwater -= dH
 
+
 class Snowpack(object):
     """
     Snowpack reservoir driven by temperature.
@@ -125,7 +128,7 @@ class Snowpack(object):
     """
 
     def __init__(self, melt_factor=None):
-        self.Hwater = 0. # SWE
+        self.Hwater = 0.  # SWE
         self.melt_factor = melt_factor
         self.T = 0.
         self.H_infiltrated = 0.
@@ -147,7 +150,7 @@ class Snowpack(object):
         Else, recharge magically bypasses snowpack
         """
 
-        self.H_deficit = 0. # Water deficit with neg ET; just this time step
+        self.H_deficit = 0.  # Water deficit with neg ET; just this time step
         # If positive recharge
         if H >= 0:
             if self.T <= 0:
@@ -185,6 +188,7 @@ class Snowpack(object):
         self.H_infiltrated += dH_melt
         self.H_discharge = 0.
         self.Hwater -= dH_melt
+
 
 class Buckets(object):
     """
@@ -303,7 +307,8 @@ class Buckets(object):
                                  ' within "initial_conditions".')
 
         # If all are the same length, then we will assign a number of reservoirs
-        self.n_reservoirs = len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m'])
+        self.n_reservoirs = len(
+            self.cfg['initial_conditions']['water_reservoir_effective_depths__m'])
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
         self.reservoirs = [
@@ -335,13 +340,13 @@ class Buckets(object):
             )
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
-        
+
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
         self.has_snowpack = 'Mean Temperature [C]' in self.hydrodata.columns
         if self.has_snowpack:
             # Instantiate snowpack
-            self.snowpack = Snowpack(self.melt_factor) # allow changes to melt factor later
+            self.snowpack = Snowpack(self.melt_factor)  # allow changes to melt factor later
         else:
             warnings.warn('"Mean Temperature [C]" has not been set. '+
                             'No snowpack processes will be simulated.')
@@ -383,25 +388,24 @@ class Buckets(object):
         # Important: This is the cumulative H_deficit, whereas
         # class Snowpack's H_deficit is for that time step only.
         self.H_deficit = 0.
-        
+
         # Compute the water years based on the input month for
         # water-year rollover
         self.compute_water_year()
-        
+
         # Scale evapotranspiration to enable water balance
         # We use this because ET estimates usually have much more
         # error than discharge, but may in the future want a way to
         # disable it.
         self.compute_ET_multiplier()
         self.compute_ET()
-        
+
         # Model spin-up, if requested
         for _ in range(self.n_spin_up_cycles):
-            self.run() #Spin-up
+            self.run()  # Spin-up
             # Later allow user-selected starting and ending time steps
             # For now, just the whole series
             self._timestep_i = self.hydrodata.index[0]  # Restart
-
 
     def compute_water_year(self):
         """
@@ -418,7 +422,8 @@ class Buckets(object):
         """
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
-        self.hydrodata_WY_means = self.hydrodata.groupby(self.hydrodata['Water Year']).mean(numeric_only=True)
+        self.hydrodata_WY_means = self.hydrodata.groupby(
+            self.hydrodata['Water Year']).mean(numeric_only=True)
         # Not needed, but no real harm in calculating
         self.hydrodata_WY_means['Runoff ratio'] = \
                             self.hydrodata_WY_means['Specific Discharge [mm/day]'] / \
@@ -452,7 +457,7 @@ class Buckets(object):
         self.hydrodata['ET for model [mm/day]'] = \
                                     _raw_ET * self.hydrodata['ET multiplier']
 
-    def update(self, time_step = None):
+    def update(self, time_step=None):
         """
         Updates water flow for one time step (typically a day)
 
@@ -598,7 +603,7 @@ class Buckets(object):
         Plot precipitation and specific discharge (data and modeled).
         """
         fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
+        ax = fig.add_subplot(1, 1, 1)
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%y-%m-%d'))
         plt.xlabel('Date', fontsize=14)
         plt.xticks(rotation=45, horizontalalignment='right')
@@ -606,7 +611,7 @@ class Buckets(object):
         plt.bar(self.hydrodata['Date'].values,
                 height=self.hydrodata['Precipitation [mm/day]'].values/self.dt,
                 width=1., align='center', label='Precipitation [mm/day]',
-                linewidth=0, color='C0', alpha=0.5) # C0 is the default bar-plot color
+                linewidth=0, color='C0', alpha=0.5)  # C0 is the default bar-plot color
         plt.twinx()
         plt.plot(self.hydrodata['Date'].values,
                       self.hydrodata['Specific Discharge [mm/day]'].values,
@@ -615,7 +620,8 @@ class Buckets(object):
                 self.hydrodata['Specific Discharge (modeled) [mm/day]'].values,
                 'k', label='Model', linewidth=2, alpha=0.8)
         plt.ylim(0, plt.ylim()[-1])
-        plt.legend(title='Specific Discharge', fontsize=11, title_fontsize=11, labelcolor='linecolor')
+        plt.legend(title='Specific Discharge', fontsize=11,
+                   title_fontsize=11, labelcolor='linecolor')
         plt.ylabel('Specific Discharge [mm/day]', fontsize=14, color='0.3')
         plt.tight_layout()
         plt.show()
@@ -635,7 +641,8 @@ class Buckets(object):
                         if self.has_snowpack else 0.)
         subsurface_storage = self.hydrodata['Subsurface storage (modeled total) [mm]'][time_step]
         # Mass removal
-        outlet_discharge = self.hydrodata['Specific Discharge (modeled) [mm/day]'][:time_step+1].sum()
+        outlet_discharge = self.hydrodata[
+            'Specific Discharge (modeled) [mm/day]'][:time_step+1].sum()
         # Carried-over water deficit
         deficit = self.H_deficit
 
@@ -671,12 +678,11 @@ class Buckets(object):
 
         if return_nse:
             return self.NSE
-            
+
 
 def main():
-    parser = argparse.ArgumentParser(description=
-              'Pass the configuration file path to run hydroRaVENS.'
-              )
+    parser = argparse.ArgumentParser(
+        description='Pass the configuration file path to run hydroRaVENS.')
     parser.add_argument('-y', '--configfile', type=str,
                             help='YAML file from which all inputs are read.')
 
