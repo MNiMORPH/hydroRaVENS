@@ -423,8 +423,8 @@ class Buckets(object):
         self.hydrodata_WY_means['Runoff ratio'] = \
                             self.hydrodata_WY_means['Specific Discharge [mm/day]'] / \
                             self.hydrodata_WY_means['Precipitation [mm/day]']
-        _ET_required = - ( self.hydrodata_WY_means['Specific Discharge [mm/day]'] -
-                            self.hydrodata_WY_means['Precipitation [mm/day]'] )
+        _ET_required = -(self.hydrodata_WY_means['Specific Discharge [mm/day]'] -
+                            self.hydrodata_WY_means['Precipitation [mm/day]'])
         self.hydrodata_WY_means['ET multiplier'] = _ET_required / \
                             self.hydrodata_WY_means['Evapotranspiration [mm/day]']
 
@@ -448,7 +448,7 @@ class Buckets(object):
         # But this is pretty straightforward and doesn't use much memory
         self.hydrodata = self.hydrodata.merge(
                                     self.hydrodata_WY_means['ET multiplier'],
-                                    on='Water Year' )
+                                    on='Water Year')
         self.hydrodata['ET for model [mm/day]'] = \
                                     _raw_ET * self.hydrodata['ET multiplier']
 
@@ -476,7 +476,7 @@ class Buckets(object):
         # If no mean temperature included, no snowpack processes simulated
         if self.has_snowpack:
             self.snowpack.set_temperature(
-                    self.hydrodata['Mean Temperature [C]'][time_step] )
+                    self.hydrodata['Mean Temperature [C]'][time_step])
             # Recharge P - ET + running deficit (neg if deficit exists)
             self.snowpack.recharge(
                     self.hydrodata['Precipitation [mm/day]'][time_step] -
@@ -658,9 +658,9 @@ class Buckets(object):
 
         # Calculate NSE
         _realvalue = ~q_model.isna() & ~q_data.isna()
-        NSE_num = np.sum( (q_model[_realvalue] - q_data[_realvalue])**2 )
-        NSE_denom = np.sum( (q_data[_realvalue] -
-                                    np.mean(q_data[_realvalue]))**2 )
+        NSE_num = np.sum((q_model[_realvalue] - q_data[_realvalue])**2)
+        NSE_denom = np.sum((q_data[_realvalue] -
+                                    np.mean(q_data[_realvalue]))**2)
         if np.sum(~_realvalue):
             print("Excluded", np.sum(~_realvalue), "no-data points from NSE calculation")
 
@@ -674,7 +674,7 @@ class Buckets(object):
             
 
 def main():
-    parser = argparse.ArgumentParser( description=
+    parser = argparse.ArgumentParser(description=
               'Pass the configuration file path to run hydroRaVENS.'
               )
     parser.add_argument('-y', '--configfile', type=str,
