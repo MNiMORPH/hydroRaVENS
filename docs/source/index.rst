@@ -7,24 +7,21 @@ HydroRaVENS Documentation
 
 A simple, flexible reservoir-based hydrological model for water balance simulation and streamflow prediction.
 
-**HydroRaVENS** (Rain and Variable Evapotranspiration, Nieve, and Streamflow) is a 
-conceptual daily-timestep model that routes precipitation through an optional snowpack 
-and a cascade of linear reservoirs. Ideal for ungauged basins, climate impact studies, 
+**HydroRaVENS** (Rain and Variable Evapotranspiration, Nieve, and Streamflow) is a
+conceptual daily-timestep model that routes precipitation through an optional snowpack
+and a cascade of linear reservoirs. Ideal for ungauged basins, climate impact studies,
 and educational applications.
 
-✨ **Key Features**
-~~~~~~~~~~~~~~~~~~~
+**Key Features**
+~~~~~~~~~~~~~~~~
 
-* 🏔️ **Optional snowpack module** – Positive-degree-day snowmelt calculations
-* 💧 **Cascading linear reservoirs** – Stack multiple reservoirs from soil to groundwater
-* 🌡️ **Flexible ET modeling** – Read from data or use Thornthwaite-Chang equation
-* ⚖️ **Mass-conserving** – Strict water balance closure
-* 📊 **Model evaluation** – Built-in Nash-Sutcliffe Efficiency (NSE) computation
-* 🐍 **Python + CLI** – Use as library or command-line tool
-* ✔️ **Lightweight** – Minimal dependencies (NumPy, Pandas, PyYAML)
-
-Quick Links
-~~~~~~~~~~~
+* Optional snowpack module -- positive-degree-day snowmelt calculations
+* Cascading linear reservoirs -- stack multiple reservoirs from soil to groundwater
+* Flexible ET modeling -- read from data or use the Thornthwaite--Chang equation
+* Mass-conserving -- strict water balance closure each water year
+* Model evaluation -- built-in Nash--Sutcliffe Efficiency (NSE) computation
+* Python API and command-line interface
+* Lightweight -- minimal dependencies (NumPy, Pandas, Matplotlib, PyYAML)
 
 .. toctree::
    :maxdepth: 2
@@ -38,7 +35,6 @@ Quick Links
    :caption: User Guide
 
    configuration
-   examples
    model_description
 
 .. toctree::
@@ -56,11 +52,11 @@ Quick Example
 .. code-block:: python
 
     import hydroravens
-    
+
     model = hydroravens.Buckets()
     model.initialize('config.yml')
     model.run()
-    print(f"NSE: {model.computeNSE():.3f}")
+    nse = model.computeNSE(verbose=True)
     model.plot()
 
 **Command-line:**
@@ -72,9 +68,9 @@ Quick Example
 Getting Help
 ~~~~~~~~~~~~
 
-* 🐛 **Report bugs:** `GitHub Issues <https://github.com/MNiMORPH/hydroRaVENS/issues>`_
-* 💬 **Discuss:** `GitHub Discussions <https://github.com/MNiMORPH/hydroRaVENS/discussions>`_
-* 📖 **Learn more:** `CSDMS Model Page <https://csdms.colorado.edu/wiki/Model:HydroRaVENS>`_
+* **Report bugs:** `GitHub Issues <https://github.com/MNiMORPH/hydroRaVENS/issues>`_
+* **Discuss:** `GitHub Discussions <https://github.com/MNiMORPH/hydroRaVENS/discussions>`_
+* **Learn more:** `CSDMS Model Page <https://csdms.colorado.edu/wiki/Model:HydroRaVENS>`_
 
 About
 ~~~~~
@@ -84,15 +80,5 @@ It is published under the GNU General Public License v3.0.
 
 **Citation:**
 
-If you use HydroRaVENS in your research, please cite:
-
-.. code-block:: bibtex
-
-    @software{Wickert2026RaVENS,
-      author = {Wickert, Andrew D.},
-      doi = {10.5281/zenodo.6787390},
-      month = May,
-      title = {{RaVENS: Rain and Variable Evapotranspiration, Nieve, and Streamflow}},
-      url = {https://github.com/MNiMORPH/RaVENS},
-      version = {2.2.0},year = {2026}
-    }
+If you use HydroRaVENS in your research, please cite it using the information in
+``CITATION.cff`` at the repository root, or via the Zenodo DOI badge above.
