@@ -14,11 +14,10 @@ The HydroRaVENS model is described on the Community Surface Dynamics Modeling Sy
 Evapotranspiration
 ^^^^^^^^^^^^^^^^^^^
 
-Chang, J., et al. (2019). Modified daily Thornthwaite reference evapotranspiration equation.
-*Irrigation and Drainage*, 68(S1).
+Chang, X., Wang, S., Gao, Z., Luo, Y., & Chen, H. (2019). Forecast of daily reference
+evapotranspiration using a modified daily Thornthwaite equation and temperature forecasts.
+*Irrigation and Drainage*, 68(2), 297--317.
 https://doi.org/10.1002/ird.2309
-
-*(Note: verify exact title via DOI; this paper provides the modified Thornthwaite ET*\ :sub:`0`\ *equations implemented in* ``evapotranspirationChang2019()``\ *.)*
 
 Pereira, A. R., & Pruitt, W. O. (2004). Adaptation of the Thom and Oliver evaporation
 equation to daily totals. *Agricultural and Forest Meteorology*, 124(1-2), 26--32.
