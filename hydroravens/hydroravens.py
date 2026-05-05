@@ -289,14 +289,15 @@ class Buckets(object):
                 sys.exit(2)
 
         # Read input time series from the CSV path specified in the config
-        self.hydrodata = pd.read_csv(self.cfg['timeseries']['datafile'],
-                            parse_dates=['Date'])
+        self.hydrodata = pd.read_csv(
+            self.cfg['timeseries']['datafile'],
+            parse_dates=['Date'])
 
         # Set variables on reservoirs
         # First, check if all reservoirs have the same length
         for _key in self.cfg['reservoirs'].keys():
             if len(self.cfg['reservoirs'][_key]) == \
-            len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m']):
+                    len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m']):
                 pass
             else:
                 raise ValueError(_key + ' within "reservoirs" contains a\n'+
@@ -349,7 +350,7 @@ class Buckets(object):
             self.snowpack = Snowpack(self.melt_factor)  # allow changes to melt factor later
         else:
             warnings.warn('"Mean Temperature [C]" has not been set. '+
-                            'No snowpack processes will be simulated.')
+                          'No snowpack processes will be simulated.')
 
         # How many times to loop the full time series for the spin-up
         # Maybe I should permit a more sophisticated spin-up at some point!
@@ -368,9 +369,9 @@ class Buckets(object):
             raise ValueError("All time steps must be 1 day.")
 
         # Compute specific discharge from data
-        self.hydrodata['Specific Discharge [mm/day]'] = \
-                self.hydrodata['Discharge [m^3/s]'] \
-                / (self.drainage_basin_area__km2*1E3) * 86400
+        self.hydrodata['Specific Discharge [mm/day]'] = (
+            self.hydrodata['Discharge [m^3/s]']
+            / (self.drainage_basin_area__km2*1E3) * 86400)
 
         # Create columns for model output
         self.hydrodata['Specific Discharge (modeled) [mm/day]'] = pd.NA
@@ -425,13 +426,13 @@ class Buckets(object):
         self.hydrodata_WY_means = self.hydrodata.groupby(
             self.hydrodata['Water Year']).mean(numeric_only=True)
         # Not needed, but no real harm in calculating
-        self.hydrodata_WY_means['Runoff ratio'] = \
-                            self.hydrodata_WY_means['Specific Discharge [mm/day]'] / \
-                            self.hydrodata_WY_means['Precipitation [mm/day]']
+        self.hydrodata_WY_means['Runoff ratio'] = (
+            self.hydrodata_WY_means['Specific Discharge [mm/day]']
+            / self.hydrodata_WY_means['Precipitation [mm/day]'])
         _ET_required = -(self.hydrodata_WY_means['Specific Discharge [mm/day]'] -
-                            self.hydrodata_WY_means['Precipitation [mm/day]'])
-        self.hydrodata_WY_means['ET multiplier'] = _ET_required / \
-                            self.hydrodata_WY_means['Evapotranspiration [mm/day]']
+                         self.hydrodata_WY_means['Precipitation [mm/day]'])
+        self.hydrodata_WY_means['ET multiplier'] = (
+            _ET_required / self.hydrodata_WY_means['Evapotranspiration [mm/day]'])
 
     def compute_ET(self):
         """
@@ -452,10 +453,10 @@ class Buckets(object):
         # rather than adding it to the dataframe + memory
         # But this is pretty straightforward and doesn't use much memory
         self.hydrodata = self.hydrodata.merge(
-                                    self.hydrodata_WY_means['ET multiplier'],
-                                    on='Water Year')
-        self.hydrodata['ET for model [mm/day]'] = \
-                                    _raw_ET * self.hydrodata['ET multiplier']
+            self.hydrodata_WY_means['ET multiplier'],
+            on='Water Year')
+        self.hydrodata['ET for model [mm/day]'] = (
+            _raw_ET * self.hydrodata['ET multiplier'])
 
     def update(self, time_step=None):
         """
@@ -524,8 +525,9 @@ class Buckets(object):
                 # groundwater, direct lake evaporation, etc. -- or related
                 # to this model not being physical or distributed, so just
                 # needing to balance mass.
-                self.reservoirs[i].recharge(self.reservoirs[i-1].H_infiltrated
-                                    + self.reservoirs[i-1].H_deficit)
+                self.reservoirs[i].recharge(
+                    self.reservoirs[i-1].H_infiltrated
+                    + self.reservoirs[i-1].H_deficit)
             self.reservoirs[i].discharge(self.dt)
             qi += self.reservoirs[i].H_discharge
         # Carry any unmet deficit forward to the next time step
@@ -534,8 +536,8 @@ class Buckets(object):
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
         if self.has_snowpack:
             self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
-        self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = \
-                                np.sum([res.Hwater for res in self.reservoirs])
+        self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = (
+            np.sum([res.Hwater for res in self.reservoirs]))
 
     def evapotranspirationChang2019(self, Tmax=None, Tmin=None, photoperiod=None,
                                     k=0.69):
@@ -578,8 +580,8 @@ class Buckets(object):
         power_law  = 16. * C * (10. * Tef / self.Chang_I) ** self.Chang_a
 
         ET0 = np.where(Tef > 26,  quadratic,
-              np.where(Tef > 0,   power_law,
-                                  0.))
+                       np.where(Tef > 0,   power_law,
+                                0.))
         return ET0
 
     def run(self):
@@ -614,11 +616,11 @@ class Buckets(object):
                 linewidth=0, color='C0', alpha=0.5)  # C0 is the default bar-plot color
         plt.twinx()
         plt.plot(self.hydrodata['Date'].values,
-                      self.hydrodata['Specific Discharge [mm/day]'].values,
-                      'royalblue', label='Data', linewidth=2, alpha=0.8)
+                 self.hydrodata['Specific Discharge [mm/day]'].values,
+                 'royalblue', label='Data', linewidth=2, alpha=0.8)
         plt.plot(self.hydrodata['Date'].values,
-                self.hydrodata['Specific Discharge (modeled) [mm/day]'].values,
-                'k', label='Model', linewidth=2, alpha=0.8)
+                 self.hydrodata['Specific Discharge (modeled) [mm/day]'].values,
+                 'k', label='Model', linewidth=2, alpha=0.8)
         plt.ylim(0, plt.ylim()[-1])
         plt.legend(title='Specific Discharge', fontsize=11,
                    title_fontsize=11, labelcolor='linecolor')
@@ -647,8 +649,8 @@ class Buckets(object):
         deficit = self.H_deficit
 
         # Discrepancy
-        excess_mass_in_model = outlet_discharge + subsurface_storage \
-                                + snow_storage - total_additions + deficit
+        excess_mass_in_model = (outlet_discharge + subsurface_storage
+                                + snow_storage - total_additions + deficit)
 
         return excess_mass_in_model
 
@@ -667,7 +669,7 @@ class Buckets(object):
         _realvalue = ~q_model.isna() & ~q_data.isna()
         NSE_num = np.sum((q_model[_realvalue] - q_data[_realvalue])**2)
         NSE_denom = np.sum((q_data[_realvalue] -
-                                    np.mean(q_data[_realvalue]))**2)
+                            np.mean(q_data[_realvalue]))**2)
         if np.sum(~_realvalue):
             print("Excluded", np.sum(~_realvalue), "no-data points from NSE calculation")
 
@@ -684,7 +686,7 @@ def main():
     parser = argparse.ArgumentParser(
         description='Pass the configuration file path to run hydroRaVENS.')
     parser.add_argument('-y', '--configfile', type=str,
-                            help='YAML file from which all inputs are read.')
+                        help='YAML file from which all inputs are read.')
 
     # Parse args if anything is passed.
     # If nothing is passed, then print help and exit.
