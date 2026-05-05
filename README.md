@@ -15,7 +15,7 @@ Simple reservoir-based hydrological model
 
 [CSDMS model page](https://csdms.colorado.edu/wiki/Model:HydroRaVENS)
 
-Simple "conceptual" hydrological model that may include an arbitrary number of linked linear reservoirs (soil-zone water, groundwater, etc.) as well as snowpack (accumulation from precipitation with T<0; positive-degree-day melt) and evapotranspiration (from external input or Thorntwaite equation).
+Simple "conceptual" hydrological model that may include an arbitrary number of linked linear reservoirs (soil-zone water, groundwater, etc.) as well as snowpack (accumulation from precipitation with T<0; positive-degree-day melt) and evapotranspiration (from external input or Thornthwaite equation).
 
 It also includes a water-balance component to adjust ET (typically the least known input) to ensure that P - Q - ET = 0 over the course of a water year.
 
