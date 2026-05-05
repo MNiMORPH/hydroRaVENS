@@ -85,7 +85,7 @@ class Reservoir(object):
         # Create a deficit and bring Hwater to 0
         if self.Hwater+H < 0:
             self.H_deficit += self.Hwater+H
-            self.Hwater = 0
+            self.Hwater = 0.
         # What if more water is added than maximum reservoir capacity?
         # Mark excess (straight to runoff) and bring Hwater to Hmax
         elif self.Hwater+H > self.Hmax:
@@ -181,7 +181,7 @@ class Snowpack(object):
         if self.T > 0:
             dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
         else:
-            dH_melt = 0
+            dH_melt = 0.
         self.H_infiltrated += dH_melt
         self.H_discharge = 0.
         self.Hwater -= dH_melt
@@ -284,7 +284,7 @@ class Buckets(object):
                 print("\nCould not parse config file:", config_file, "\n", e)
                 sys.exit(2)
 
-        # Import dataframe from yml
+        # Read input time series from the CSV path specified in the config
         self.hydrodata = pd.read_csv(self.cfg['timeseries']['datafile'],
                             parse_dates=['Date'])
 
@@ -433,7 +433,7 @@ class Buckets(object):
         Computes an evapotranspiration column from the input data.
 
         Does this in two steps:
-        1. Initial ET (provided or from Thorntwaite)
+        1. Initial ET (provided or from Thornthwaite)
         2. Modifying this over a water year to enforce water balance
         """
         if self.et_method == 'datafile':
@@ -607,7 +607,7 @@ class Buckets(object):
                 height=self.hydrodata['Precipitation [mm/day]'].values/self.dt,
                 width=1., align='center', label='Precipitation [mm/day]',
                 linewidth=0, color='C0', alpha=0.5) # C0 is the default bar-plot color
-        ax2 = plt.twinx()
+        plt.twinx()
         plt.plot(self.hydrodata['Date'].values,
                       self.hydrodata['Specific Discharge [mm/day]'].values,
                       'royalblue', label='Data', linewidth=2, alpha=0.8)
@@ -645,7 +645,7 @@ class Buckets(object):
 
         return excess_mass_in_model
 
-    def computeNSE(self, _return=True, verbose=False):
+    def computeNSE(self, return_nse=True, verbose=False):
         """
         Compute the Nash-Sutcliffe Efficiency of measured vs. modeled
         specific discharge
@@ -669,7 +669,7 @@ class Buckets(object):
         if verbose:
             print("NSE:", self.NSE)
 
-        if _return:
+        if return_nse:
             return self.NSE
             
 
