@@ -88,10 +88,11 @@ If you use HydroRaVENS in your research, please cite:
 
 .. code-block:: bibtex
 
-    @software{hydroravens2019,
-      title={HydroRaVENS: A simple reservoir-based hydrological model},
-      author={MNiMORPH},
-      url={https://github.com/MNiMORPH/hydroRaVENS},
-      doi={10.5281/zenodo.3240355},
-      year={2019}
+    @software{Wickert2026RaVENS,
+      author = {Wickert, Andrew D.},
+      doi = {10.5281/zenodo.6787390},
+      month = May,
+      title = {{RaVENS: Rain and Variable Evapotranspiration, Nieve, and Streamflow}},
+      url = {https://github.com/MNiMORPH/RaVENS},
+      version = {2.2.0},year = {2026}
     }
