@@ -418,15 +418,15 @@ class Buckets(object):
         """
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
-        self.hydromeansWY = self.hydrodata.groupby(self.hydrodata['Water Year']).mean(numeric_only=True)
+        self.hydrodata_WY_means = self.hydrodata.groupby(self.hydrodata['Water Year']).mean(numeric_only=True)
         # Not needed, but no real harm in calculating
-        self.hydromeansWY['Runoff ratio'] = \
-                            self.hydromeansWY['Specific Discharge [mm/day]'] / \
-                            self.hydromeansWY['Precipitation [mm/day]']
-        _ET_required = - ( self.hydromeansWY['Specific Discharge [mm/day]'] -
-                            self.hydromeansWY['Precipitation [mm/day]'] )
-        self.hydromeansWY['ET multiplier'] = _ET_required / \
-                            self.hydromeansWY['Evapotranspiration [mm/day]']
+        self.hydrodata_WY_means['Runoff ratio'] = \
+                            self.hydrodata_WY_means['Specific Discharge [mm/day]'] / \
+                            self.hydrodata_WY_means['Precipitation [mm/day]']
+        _ET_required = - ( self.hydrodata_WY_means['Specific Discharge [mm/day]'] -
+                            self.hydrodata_WY_means['Precipitation [mm/day]'] )
+        self.hydrodata_WY_means['ET multiplier'] = _ET_required / \
+                            self.hydrodata_WY_means['Evapotranspiration [mm/day]']
 
     def compute_ET(self):
         """
@@ -447,7 +447,7 @@ class Buckets(object):
         # rather than adding it to the dataframe + memory
         # But this is pretty straightforward and doesn't use much memory
         self.hydrodata = self.hydrodata.merge(
-                                    self.hydromeansWY['ET multiplier'],
+                                    self.hydrodata_WY_means['ET multiplier'],
                                     on='Water Year' )
         self.hydrodata['ET for model [mm/day]'] = \
                                     _raw_ET * self.hydrodata['ET multiplier']
