@@ -116,10 +116,12 @@ The ``general`` section
      - Description
    * - ``scalar_dt``
      - bool
-     - Enforce daily time step (must be ``true``)
+     - Required field; set to ``true``. The model always enforces a 1-day
+       time step regardless of this value.
    * - ``spin_up_cycles``
      - int
-     - Number of complete passes through data before main run (1 minimum)
+     - Number of complete passes through data before the main run. Use 0 to
+       skip spin-up.
 
 Example:
 
@@ -162,7 +164,7 @@ Example:
             - 2000    # Groundwater: drains in ~2000 days
         exfiltration_fractions:
             - 0.8     # 80% to river, 20% to next layer
-            - 1.0     # 100% to river (bottom layer MUST be 1.0)
+            - 1.0     # 100% to river (should be 1.0; warning issued if not)
         maximum_effective_depths__m:
             - .inf
             - .inf

@@ -133,8 +133,9 @@ Model performance depends on the reservoir parameters:
   sensitivity to these initial values.
 
 **Spin-up cycles** (``spin_up_cycles``)
-  Number of passes through the full record before the main run.
-  One cycle is usually sufficient.
+  Number of passes through the full record before the main run; 0 to skip.
+  Longer residence times (large :math:`\tau`) require more cycles to
+  equilibrate deep groundwater reservoirs.
 
 Next Steps
 ~~~~~~~~~~

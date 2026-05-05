@@ -51,14 +51,16 @@ If mean air temperature is provided, snowpack processes are enabled.
   
   All melt is routed directly to the top reservoir.
 
-**Sublimation (ET Deficit):**
-  If :math:`E > P + M`, the ET deficit first sublimates snow:
-  
+**ET deficit:**
+  When precipitation minus ET is negative, the deficit first sublimates
+  snow:
+
   .. math::
-  
-      \text{Sublimation} = \min(\text{SWE}_t, E - P - M)
-  
-  Any remaining deficit is passed to the reservoirs.
+
+      \text{Sublimation} = \min\!\left(\text{SWE}_t,\ \max(0,\ E_t - P_t)\right)
+
+  Any deficit exceeding available SWE is passed to the top subsurface
+  reservoir and, if still unmet, carried forward to the next time step.
 
 Linear Reservoir Cascade
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -86,14 +88,20 @@ where:
       Q_{\text{infiltrate},i} = (1 - f_i) \cdot Q_i
 
 **Constraint:**
-  The bottom reservoir must fully discharge: :math:`f_{\text{bottom}} = 1.0`
+  The bottom reservoir should fully discharge (:math:`f_{\text{bottom}} = 1.0`).
+  A warning is issued if not, as this violates mass conservation.
 
 **Storage Update:**
-  After drainage, infiltration, and ET:
-  
+  Recharge is applied first, then exponential drainage:
+
   .. math::
-  
-      H_i(t+1) = \max(0, H_i(t) - Q_i(t) + Q_{\text{recharge},i} - E_i)
+
+      H_i(t+1) = \bigl(H_i(t) + Q_{\text{recharge},i}\bigr)\,e^{-\Delta t/\tau_i}
+
+  Overflow above :math:`H_{\max}` exits immediately as direct runoff; any
+  deficit is passed to the next-deeper reservoir. ET is not subtracted
+  separately at the reservoir level — it is already incorporated into the
+  recharge input to the top reservoir.
 
 Evapotranspiration
 ~~~~~~~~~~~~~~~~~~
