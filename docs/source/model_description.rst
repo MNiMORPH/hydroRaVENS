@@ -34,11 +34,12 @@ Snowpack Module (Optional)
 If mean air temperature is provided, snowpack processes are enabled.
 
 **Accumulation:**
-  When :math:`T \leq 0°C`, all precipitation accumulates as snow (stored as SWE):
-  
+  When :math:`T \leq 0°C`, net water input (precipitation minus ET) accumulates
+  as snow (stored as SWE):
+
   .. math::
-  
-      \text{SWE}_{t+1} = \text{SWE}_t + P_t
+
+      \text{SWE}_{t+1} = \text{SWE}_t + (P_t - E_t)
 
 **Melt:**
   When :math:`T > 0°C`, melt is computed using the positive-degree-day (PDD) approach:
@@ -66,15 +67,16 @@ Linear Reservoir Cascade
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 Water drains through a stack of reservoirs (top = shallowest, bottom = deepest).
-Each reservoir drains by exponential decay:
+Each reservoir first receives its recharge input, then drains by exponential decay:
 
 .. math::
 
-    Q_i(t) = H_i(t) \cdot (1 - e^{-\Delta t / \tau_i})
+    Q_i(t) = \bigl(H_i(t) + Q_{\text{recharge},i}\bigr) \cdot (1 - e^{-\Delta t / \tau_i})
 
 where:
 
-* :math:`H_i` = water depth in reservoir :math:`i` (m)
+* :math:`H_i` = water depth in reservoir :math:`i` at the start of the time step (m)
+* :math:`Q_{\text{recharge},i}` = water input to reservoir :math:`i` this time step (mm)
 * :math:`\tau_i` = e-folding residence time (days)
 * :math:`\Delta t` = time step (1 day)
 

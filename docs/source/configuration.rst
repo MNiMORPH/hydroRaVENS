@@ -25,7 +25,8 @@ Configuration File Structure
         # Reservoir cascade configuration
     
     snowmelt:
-        # (Optional) Snow processes
+        # Required section; snowpack processes are only active if
+        # Mean Temperature [C] is present in the input CSV
 
 The ``timeseries`` section
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -169,10 +170,12 @@ Example:
             - .inf
             - .inf
 
-The ``snowmelt`` section (optional)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The ``snowmelt`` section
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-Only used if mean temperature is in the input CSV.
+This section is **always required** in the configuration file. Snowpack
+*processes* are only activated when ``Mean Temperature [C]`` is present in
+the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
 
 .. list-table::
    :widths: 25 15 50
@@ -206,7 +209,7 @@ Complete Example
     
     catchment:
         drainage_basin_area__km2: 3800
-        evapotranspiration_method: ThorntwaiteChang2019
+        evapotranspiration_method: ThorntwaiteChang2019  # requires T_monthly_normals in Python
         water_year_start_month: 10
     
     general:
@@ -221,8 +224,11 @@ Complete Example
     snowmelt:
         PDD_melt_factor: 1.0
 
-Common Configuration Presets
+Illustrative Starting Points
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These are rough starting points only, not calibrated or validated parameter
+sets. Actual values depend strongly on the specific catchment.
 
 **Alpine watershed with snowpack:**
 
