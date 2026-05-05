@@ -34,12 +34,26 @@ class Reservoir(object):
 
     def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf, H0=0.):
         """
-        t_efold: e-folding time for reservoir depletion (same units as time
-                 steps; typically days)
-        f_to_discharge: fraction of the water lost during that e-folding time
-                        that exfiltrates to river discharge (as opposed to
-                        entering one or more other reservoirs)
-        Hmax: Maximum water volume that can be held
+        Initialize a linear reservoir.
+
+        Parameters
+        ----------
+        t_efold : float
+            E-folding residence time for reservoir depletion (days, or
+            whatever time unit matches the model time steps).
+        f_to_discharge : float, optional
+            Fraction of water lost each time step that exits as river
+            discharge. The remainder (1 - f_to_discharge) infiltrates to
+            the next-deeper reservoir. Default 1.0 (all to discharge).
+        Hmax : float, optional
+            Maximum water depth the reservoir can hold. Default np.inf.
+        H0 : float, optional
+            Initial water depth at the start of the simulation. Default 0.
+
+        Raises
+        ------
+        ValueError
+            If t_efold <= 0, f_to_discharge < 0 or > 1, or Hmax < 0.
         """
         self.Hwater = H0
         self.Hmax = Hmax
@@ -70,8 +84,22 @@ class Reservoir(object):
 
     def recharge(self, H):
         """
-        Recharge can be positive (precipitation > evapotranspiration) or
-        negative (evapotranspiration > precipitation)
+        Add or remove water from the reservoir.
+
+        Recharge H can be positive (net water input, e.g. P > ET) or
+        negative (net deficit, e.g. ET > P). Sets H_excess if the
+        reservoir overflows Hmax, or H_deficit if more water is removed
+        than the reservoir holds.
+
+        Parameters
+        ----------
+        H : float
+            Depth of water added (positive) or removed (negative).
+
+        Raises
+        ------
+        ValueError
+            If Hwater is already negative before recharge is applied.
         """
         # Extra water above a maximum cap
         self.H_excess = 0.
@@ -100,12 +128,17 @@ class Reservoir(object):
 
     def discharge(self, dt):
         """
-        Discharge water from the reservoir over time step dt.
+        Discharge water from the reservoir over one time step.
 
-        Computes the amount of water lost via exponential decay, then splits
-        it between direct discharge to the river (H_exfiltrated) and
-        infiltration to the next-deeper reservoir (H_infiltrated). Excess
-        from recharge() is added to H_discharge.
+        Computes water lost by exponential decay, partitions it between
+        river discharge (H_exfiltrated) and infiltration to the next-deeper
+        reservoir (H_infiltrated), and adds overflow from recharge()
+        (H_excess) to H_discharge.
+
+        Parameters
+        ----------
+        dt : float
+            Time step duration (same units as t_efold; typically days).
         """
         dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
         self.H_exfiltrated = dH * self.f_to_discharge
@@ -128,6 +161,15 @@ class Snowpack(object):
     """
 
     def __init__(self, melt_factor=None):
+        """
+        Initialize an empty snowpack.
+
+        Parameters
+        ----------
+        melt_factor : float, optional
+            Positive-degree-day melt factor (mm SWE °C⁻¹ day⁻¹).
+            Can be set or updated later via set_melt_factor().
+        """
         self.Hwater = 0.  # SWE
         self.melt_factor = melt_factor
         self.T = 0.
@@ -137,17 +179,41 @@ class Snowpack(object):
 
     def set_melt_factor(self, melt_factor):
         """
-        Change the melt factor (PDD)
+        Set or update the positive-degree-day melt factor.
+
+        Parameters
+        ----------
+        melt_factor : float
+            Melt rate per positive degree-day (mm SWE °C⁻¹ day⁻¹).
         """
         self.melt_factor = melt_factor
 
     def set_temperature(self, T):
+        """
+        Set the mean air temperature for the current time step.
+
+        Parameters
+        ----------
+        T : float
+            Mean air temperature (°C).
+        """
         self.T = T
 
     def recharge(self, H):
         """
-        If T <= 0, all recharge to snowpack
-        Else, recharge magically bypasses snowpack
+        Apply net water input or deficit to the snowpack.
+
+        If T <= 0, positive H accumulates as snow (SWE). If T > 0,
+        positive H bypasses the snowpack and is passed directly to the
+        top subsurface reservoir via H_infiltrated. Negative H (ET > P)
+        is removed from the snowpack as sublimation; any remainder that
+        exceeds available SWE becomes H_deficit.
+
+        Parameters
+        ----------
+        H : float
+            Net water depth for this time step (mm). Positive = input
+            (P - ET > 0); negative = deficit (ET - P > 0).
         """
 
         self.H_deficit = 0.  # Water deficit with neg ET; just this time step
@@ -177,9 +243,22 @@ class Snowpack(object):
 
     def discharge(self, dt):
         """
-        Currently, sends all snowmelt to the top layer for infiltration.
-        This is arbitrary and neglects melt atop frozen soil.
-        Maybe the name of the function should be updated.
+        Compute snowmelt and route it to the top subsurface reservoir.
+
+        Melt is computed using the positive-degree-day method and added
+        to H_infiltrated. All melt infiltrates to the top reservoir;
+        direct snowmelt runoff to the river is not modeled. H_discharge
+        is always 0 for the snowpack.
+
+        Parameters
+        ----------
+        dt : float
+            Time step duration (days).
+
+        Notes
+        -----
+        Routing all melt to infiltration is a simplification that
+        neglects surface runoff from melt atop frozen or saturated soil.
         """
         if self.T > 0:
             dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
@@ -199,6 +278,22 @@ class Buckets(object):
     """
 
     def __init__(self, T_monthly_normals=None):
+        """
+        Initialize the watershed model.
+
+        If using the ThorntwaiteChang2019 ET method, pass
+        T_monthly_normals here so that the thermal index I and exponent
+        a are computed once from climatological normals and remain fixed
+        throughout the simulation.
+
+        Parameters
+        ----------
+        T_monthly_normals : array-like of length 12, optional
+            Long-term mean monthly temperatures (°C) used to compute the
+            Thornthwaite thermal index I and exponent a per Chang et al.
+            (2019), https://doi.org/10.1002/ird.2309. Required when
+            evapotranspiration_method is 'ThorntwaiteChang2019'.
+        """
         # Thornthwaite thermal index and exponent, per Chang et al. (2019)
         # https://doi.org/10.1002/ird.2309
         # I is climatologically imposed by the local normal temperature regime
@@ -250,8 +345,16 @@ class Buckets(object):
 
     def export_Hlist(self):
         """
-        Export the list of water depths, for reinitialization
-        (e.g., to start after a spin-up phase or to restart a paused model run)
+        Return the current water depths in all subsurface reservoirs.
+
+        Useful for checkpointing reservoir state between a spin-up run
+        and the main simulation, or for restarting a paused run.
+
+        Returns
+        -------
+        list of float
+            Water depth in each reservoir, ordered from shallowest
+            (index 0) to deepest.
         """
         return [reservoir.Hwater for reservoir in self.reservoirs]
 
@@ -410,7 +513,12 @@ class Buckets(object):
 
     def compute_water_year(self):
         """
-        Adds a "water year" column to the Pandas DataFrame
+        Assign a water-year label to each row in self.hydrodata.
+
+        Adds a 'Water Year' column. A water year begins on
+        water_year_start_month and is labelled by the calendar year in
+        which it ends. For example, with a start month of October (USGS
+        convention), 1 Oct 2020 – 30 Sep 2021 is water year 2021.
         """
         self.hydrodata['Water Year'] = pd.DatetimeIndex(self.hydrodata['Date']).year
         self.hydrodata['Water Year'] += \
@@ -418,8 +526,12 @@ class Buckets(object):
 
     def compute_ET_multiplier(self):
         """
-        Calculates the total amount of evapotranspiration required to balance
-        discharge and precipitation in each water year
+        Compute per-water-year ET scaling factors to enforce water balance.
+
+        For each water year, computes the ratio of required ET (P - Q) to
+        measured or computed ET, and stores this as 'ET multiplier' in
+        self.hydrodata_WY_means. This multiplier is later applied in
+        compute_ET() to scale ET so that P - Q - ET ≈ 0 over each water year.
         """
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
@@ -436,11 +548,16 @@ class Buckets(object):
 
     def compute_ET(self):
         """
-        Computes an evapotranspiration column from the input data.
+        Build the water-balance-adjusted ET time series used in the model.
 
-        Does this in two steps:
-        1. Initial ET (provided or from Thornthwaite)
-        2. Modifying this over a water year to enforce water balance
+        Assembles ET in two steps:
+
+        1. Obtain raw daily ET from the input data file or the
+           Thornthwaite–Chang 2019 equation (see evapotranspirationChang2019()).
+        2. Scale raw ET by the per-water-year multiplier from
+           compute_ET_multiplier() so that P - Q - ET ≈ 0 in each water year.
+
+        The result is stored as 'ET for model [mm/day]' in self.hydrodata.
         """
         if self.et_method == 'datafile':
             _raw_ET = self.hydrodata['Evapotranspiration [mm/day]']
@@ -460,14 +577,26 @@ class Buckets(object):
 
     def update(self, time_step=None):
         """
-        Updates water flow for one time step (typically a day)
+        Advance the model by one time step.
+
+        Routes precipitation minus ET through the snowpack (if present) and
+        then through each subsurface reservoir in order from shallowest to
+        deepest. Stores modeled specific discharge, snowpack SWE, and total
+        subsurface storage in self.hydrodata for the current time step.
+        Part of the CSDMS Basic Model Interface.
 
         NOTE FALLACY: recharging before discharging,
-        even though during the same time step
-        consider changing to use half-recharge from each time step
+        even though during the same time step.
+        Consider changing to use half-recharge from each time step.
 
         FOR LATER: , dt_at_timestep=self.dt
         FOR SOONER: WATER-YEAR BALANCE
+
+        Parameters
+        ----------
+        time_step : int, optional
+            Index into self.hydrodata for the time step to update. If None,
+            uses and then increments the internal counter self._timestep_i.
         """
 
         # time_step sets the index of the row in the Pandas DataFrame
@@ -585,13 +714,23 @@ class Buckets(object):
         return ET0
 
     def run(self):
+        """
+        Advance the model through all time steps in self.hydrodata.
+
+        Calls update() sequentially for every row in self.hydrodata, beginning
+        from self._timestep_i. Part of the CSDMS Basic Model Interface.
+        """
         for _ in self.hydrodata.index:
             self.update()
 
     def finalize(self):
         """
-        Compute model skill and produce output plots. Part of the CSDMS
-        Basic Model Interface.
+        Report model skill and display output plots.
+
+        Calls computeNSE(verbose=True) to print the Nash–Sutcliffe Efficiency
+        to stdout, then calls plot() to display a time-series comparison of
+        observed and modeled specific discharge. Part of the CSDMS Basic Model
+        Interface.
         """
         # Goodness of fit
         # Add options to print and/or save values later
@@ -602,7 +741,11 @@ class Buckets(object):
 
     def plot(self):
         """
-        Plot precipitation and specific discharge (data and modeled).
+        Display a time-series comparison of precipitation and specific discharge.
+
+        Produces a dual-axis figure: precipitation as a bar chart on the left
+        axis and both observed and modeled specific discharge as line plots on
+        the right axis.
         """
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
@@ -630,7 +773,25 @@ class Buckets(object):
 
     def check_mass_balance(self, time_step=None):
         """
-        Add up balance components in mm
+        Compute the mass-balance discrepancy at a given time step.
+
+        Compares cumulative inputs (P - ET) from the start of the record
+        through time_step with cumulative outputs (discharge) plus current
+        storage (snowpack + subsurface reservoirs) and any carried-over
+        deficit. Returns the excess mass still in the model; a value near
+        zero indicates good mass conservation.
+
+        Parameters
+        ----------
+        time_step : int, optional
+            Row index in self.hydrodata at which to evaluate the balance.
+            Defaults to the last row.
+
+        Returns
+        -------
+        excess_mass_in_model : float
+            Excess water remaining in the model budget (mm). Should be ~0
+            for a mass-conserving run.
         """
         if time_step is None:
             time_step = self.hydrodata.index[-1]
@@ -656,9 +817,25 @@ class Buckets(object):
 
     def computeNSE(self, return_nse=True, verbose=False):
         """
-        Compute the Nash-Sutcliffe Efficiency of measured vs. modeled
-        specific discharge
-        By default, returns this value
+        Compute the Nash–Sutcliffe Efficiency of the discharge simulation.
+
+        Compares modeled and observed specific discharge for all time steps
+        where both values are non-missing. Stores the result as self.NSE.
+
+        Parameters
+        ----------
+        return_nse : bool, optional
+            If True (default), return the NSE value.
+        verbose : bool, optional
+            If True, print the NSE value to stdout.
+
+        Returns
+        -------
+        NSE : float or None
+            Nash–Sutcliffe Efficiency coefficient. Returns None if
+            return_nse is False. A value of 1 indicates perfect agreement;
+            values below 0 indicate the model performs worse than the
+            observed-mean predictor.
         """
 
         # Shorthand for fcn
