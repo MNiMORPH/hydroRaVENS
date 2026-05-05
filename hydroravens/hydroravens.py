@@ -318,8 +318,8 @@ class Buckets(object):
 
         # Check if bottom reservoir discharges all to river: conserve mass.
         # But allow through with a warning in case the user wants a
-        # deep and non-discharging reservoir (although this could be set up)
-        # explicitly too)
+        # deep and non-discharging reservoir (although this could be set up
+        # explicitly too).
         if self.reservoirs[-1].f_to_discharge < 1:
             warnings.warn("f_to_discharge of bottom water-storage layer < 1.\n"+
                           "You are not conserving mass.")
@@ -396,7 +396,7 @@ class Buckets(object):
         self.compute_ET()
         
         # Model spin-up, if requested
-        for i in range(self.n_spin_up_cycles):
+        for _ in range(self.n_spin_up_cycles):
             self.run() #Spin-up
             # Later allow user-selected starting and ending time steps
             # For now, just the whole series
@@ -523,11 +523,7 @@ class Buckets(object):
                                     + self.reservoirs[i-1].H_deficit)
             self.reservoirs[i].discharge(self.dt)
             qi += self.reservoirs[i].H_discharge
-        # At the bottom of the heap, if a deficit still exists, then
-        # note this the running water budget
-        # (Just add: Is 0 unless )
-        # And then we have to deal wtih this in the next round
-        # If 0, great. If not 0, passes on
+        # Carry any unmet deficit forward to the next time step
         self.H_deficit = self.reservoirs[-1].H_deficit
 
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
@@ -671,7 +667,7 @@ class Buckets(object):
         self.NSE = 1 - NSE_num / NSE_denom
 
         if verbose:
-            print( "NSE:", self.NSE )
+            print("NSE:", self.NSE)
 
         if _return:
             return self.NSE
