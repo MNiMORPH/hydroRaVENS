@@ -6,7 +6,7 @@ from hydroravens._version import __version__
 
 project = 'HydroRaVENS'
 copyright = '2019-2026, MNiMORPH'
-author = 'Andrew Wickert'
+author = 'Andrew D. Wickert'
 release = __version__
 
 extensions = [

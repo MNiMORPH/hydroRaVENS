@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 77.0.3"]
+requires = ["setuptools >= 64.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
@@ -40,11 +40,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Hydrology",
 ]
 
+[project.optional-dependencies]
+docs = [
+  "sphinx>=4.0",
+  "sphinx-rtd-theme>=1.0",
+]
+
 [tool.setuptools.dynamic]
 version = {attr = "hydroravens._version.__version__"}
 
 [project.scripts]
-hydroravens = "hydroravens.cli:RunHydroRaVENS"
+hydroravens = "hydroravens.cli:run"
 
 [project.urls]
 Homepage = "https://csdms.colorado.edu/wiki/Model:HydroRaVENS"
