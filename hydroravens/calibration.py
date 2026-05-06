@@ -2,7 +2,7 @@
 hydroravens.calibration
 ~~~~~~~~~~~~~~~~~~~~~~~
 Run hydroRaVENS with a given parameter set and return a goodness-of-fit
-metric, optionally scored over a specific date window.
+metric and AIC, optionally scored over a specific date window.
 
 Intended use: call run_and_score() from a Dakota driver or any other
 optimizer. The YAML config passed to cfg must have spin_up_cycles: 0;
@@ -24,6 +24,14 @@ Supported metrics
          low flows and base flow; useful when base flow matters as much as
          peaks.  A small epsilon (1 % of mean observed flow) is added
          before taking logs to avoid log(0).
+
+AIC
+---
+AIC = N * ln(SS_res_log / N) + 2k, where SS_res_log is the sum of squared
+residuals on log-transformed flows and k is the number of free parameters
+passed to run_and_score().  Log-transforming flows makes the Gaussian
+residual assumption more defensible for discharge data.  AIC is intended
+for comparing models with different numbers of reservoirs; lower is better.
 """
 
 import numpy as np
@@ -33,7 +41,7 @@ from .hydroravens import Buckets
 
 
 # ---------------------------------------------------------------------------
-# Metric helpers – operate on plain numpy arrays
+# Metric and AIC helpers – operate on plain numpy arrays
 # ---------------------------------------------------------------------------
 
 def _nse(m, o):
@@ -52,6 +60,14 @@ def _log_kge(m, o):
     return _kge(np.log(m + eps), np.log(o + eps))
 
 
+def _aic(m, o, k):
+    """AIC on log-transformed flows with k free parameters."""
+    eps        = 0.01 * o.mean()
+    ss_res_log = np.sum((np.log(m + eps) - np.log(o + eps)) ** 2)
+    n          = len(o)
+    return float(n * np.log(ss_res_log / n) + 2 * k)
+
+
 _METRICS = {
     'NSE':    _nse,
     'KGE':    _kge,
@@ -67,7 +83,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   melt_factor=None, start=None, end=None, spin_up_cycles=3,
                   metric='KGE'):
     """
-    Run hydroRaVENS and return a goodness-of-fit score.
+    Run hydroRaVENS and return a goodness-of-fit score and AIC.
 
     Parameters
     ----------
@@ -89,11 +105,13 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         Degree-day snowmelt factor [mm SWE per degC per day]. Overrides
         the value in cfg.
     start : str or datetime-like, optional
-        Start of the scoring window (inclusive). The metric is computed
-        only over dates >= start. Spin-up still runs the full record.
+        Start of the scoring window (inclusive). Both the metric and AIC
+        are computed only over dates >= start. Spin-up still runs the
+        full record.
     end : str or datetime-like, optional
-        End of the scoring window (inclusive). The metric is computed only
-        over dates <= end. Spin-up still runs the full record.
+        End of the scoring window (inclusive). Both the metric and AIC
+        are computed only over dates <= end. Spin-up still runs the full
+        record.
     spin_up_cycles : int, optional
         Number of times to loop the full record before the scored run.
         Default is 3.
@@ -104,6 +122,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     -------
     score : float
         Goodness-of-fit (higher is better for all metrics).
+        Returns np.nan if the scoring window contains no valid data.
+    aic : float
+        Akaike Information Criterion on log-transformed flows.
+        k (number of free parameters) is counted from the non-None
+        arguments passed to this function.  Lower AIC is better; use
+        to compare models with different numbers of reservoirs.
         Returns np.nan if the scoring window contains no valid data.
     b : Buckets
         The Buckets object after the final run, available for plotting
@@ -121,21 +145,27 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     b = Buckets()
     b.initialize(cfg)
 
-    # --- Parameter overrides ---
+    # --- Parameter overrides and free-parameter count ---
+    k = 0
+
     if t_efold is not None:
         for i, val in enumerate(t_efold):
             b.reservoirs[i].t_efold = val
+        k += len(t_efold)
 
     if f_to_discharge is not None:
         for i, val in enumerate(f_to_discharge):
             b.reservoirs[i].f_to_discharge = val
+        k += len(f_to_discharge)
 
     if Hmax is not None:
         for i, val in enumerate(Hmax):
             b.reservoirs[i].Hmax = val
+        k += len(Hmax)
 
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor
+        k += 1
 
     # --- Spin up on the full record with calibrated parameters ---
     for _ in range(spin_up_cycles):
@@ -156,10 +186,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         mask &= b.hydrodata['Date'] <= pd.Timestamp(end)
 
     if mask.sum() == 0:
-        return np.nan, b
+        return np.nan, np.nan, b
 
     m = np.asarray(q_mod[mask], dtype=float)
     o = np.asarray(q_obs[mask], dtype=float)
 
     score = _METRICS[metric](m, o)
-    return score, b
+    aic   = _aic(m, o, k)
+
+    return score, aic, b
