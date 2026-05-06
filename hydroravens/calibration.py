@@ -133,6 +133,81 @@ def _fdc(q):
     return pd.Series(flows, index=_FDC_PROBS, name='Specific discharge [mm/day]')
 
 
+def _nash_cascade(q, N, K, dt=1.0):
+    """
+    Route a runoff time series through a Nash cascade of N identical
+    linear reservoirs, each with storage time constant K [days].
+
+    The cascade impulse response (instantaneous unit hydrograph) is a
+    two-parameter gamma distribution:
+
+        h(t) = t^(N-1) * exp(-t/K) / (K^N * Gamma(N))
+
+    with mean travel time N*K [days] and variance N*K^2 [days^2].  For
+    N = 1 the response reduces to a single exponential.
+
+    Each reservoir is updated with the exact analytical solution for
+    piecewise-constant inflow over a timestep dt:
+
+        S_i(t+dt) = S_i(t) * exp(-dt/K)  +  K * Q_{i-1}(t) * (1 - exp(-dt/K))
+        Q_i(t+dt) = S_i(t+dt) / K
+
+    This form is unconditionally stable for any K > 0 and dt > 0, unlike
+    the forward-Euler discretisation which requires dt/K < 2.
+
+    Parameters
+    ----------
+    q : array-like, shape (T,)
+        Runoff input time series [mm/day].
+    N : int
+        Number of linear reservoirs in series (shape parameter).
+        N = 2 is typical for medium-sized catchments (area ~ 10^3 km^2).
+    K : float
+        Storage time constant of each reservoir [days] (scale parameter).
+        Mean travel time through the cascade is N * K.
+    dt : float, optional
+        Timestep [days].  Default 1.0.
+
+    Returns
+    -------
+    np.ndarray, shape (T,)
+        Routed discharge time series [mm/day].
+
+    References
+    ----------
+    Nash, J. E. (1957). The form of the instantaneous unit hydrograph.
+        IAHS Publ. 45, 114–121.
+        (Introduced the N-reservoir cascade and its gamma IUH.)
+
+    Dooge, J. C. I. (1959). A general theory of the unit hydrograph.
+        J. Geophys. Res., 64(2), 241–256.
+        https://doi.org/10.1029/JZ064i002p00241
+
+    Rodriguez-Iturbe, I. and Valdés, J. B. (1979). The geomorphologic
+        structure of hydrologic response. Water Resour. Res., 15(6),
+        1409–1420.
+        https://doi.org/10.1029/WR015i006p01409
+        (Shows that the gamma IUH arises naturally from Horton scaling
+        laws, justifying its use without explicit flow-path geometry.)
+    """
+    q     = np.asarray(q, dtype=float)
+    N     = int(round(N))
+    alpha = np.exp(-dt / K)          # exact decay factor over one timestep
+    beta  = K * (1.0 - alpha)        # input gain:  K*(1 - exp(-dt/K))
+
+    S   = np.zeros(N)                # initial storage in each reservoir [mm]
+    out = np.empty_like(q)
+
+    for t in range(len(q)):
+        inflow = q[t]
+        for i in range(N):
+            S[i]   = alpha * S[i] + beta * inflow
+            inflow = S[i] / K        # outflow from reservoir i → inflow to i+1
+        out[t] = inflow              # outflow from the final reservoir
+
+    return out
+
+
 _METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge}
 
 
@@ -143,7 +218,7 @@ _METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge}
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   melt_factor=None, initial_states=None,
                   start=None, end=None, spin_up_cycles=3,
-                  metric='KGE'):
+                  metric='KGE', routing_N=2, routing_K=None):
     """
     Run hydroRaVENS and return a CalibResult named tuple.
 
@@ -186,6 +261,20 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         decade runs.
     metric : {'KGE', 'NSE', 'logKGE'}, optional
         Goodness-of-fit metric.  Default is 'KGE'.
+    routing_N : int, optional
+        Number of identical linear reservoirs in the Nash cascade used
+        for channel routing (shape parameter of the gamma IUH).
+        Default is 2.  Set routing_K to enable routing; routing_N is
+        counted as a free parameter in k only when it is explicitly
+        calibrated (the caller must add 1 to the k count via
+        run_and_score if routing_N is varied).
+    routing_K : float or None, optional
+        Storage time constant [days] of each Nash-cascade reservoir
+        (scale parameter).  Mean travel time through the cascade is
+        routing_N * routing_K.  When None (default), no routing is
+        applied and the model output is compared directly to observed
+        discharge.  When provided, routing_K is counted as one free
+        parameter.
 
     Returns
     -------
@@ -237,6 +326,9 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         b.snowpack.melt_factor = melt_factor
         k += 1
 
+    if routing_K is not None:
+        k += 1
+
     # --- Optional: override initial storage states (for chained decades) ---
     if initial_states is not None:
         for i, h in enumerate(initial_states['reservoirs']):
@@ -258,8 +350,19 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         'snowpack':   b.snowpack.Hwater if b.has_snowpack else 0.0,
     }
 
-    # --- Mask to scoring window ---
+    # --- Optional: route total runoff through Nash cascade ---
+    # Routing is applied to the full simulation output before the scoring
+    # window is applied, so that routing-reservoir state is correct at the
+    # window boundaries.  The routed series is written back into the Buckets
+    # hydrodata frame so that CalibResult.buckets reflects routed discharge
+    # for downstream plotting.
     q_mod = b.hydrodata['Specific Discharge (modeled) [mm/day]']
+    if routing_K is not None:
+        routed = _nash_cascade(q_mod.to_numpy(), routing_N, routing_K)
+        q_mod  = pd.Series(routed, index=q_mod.index, name=q_mod.name)
+        b.hydrodata['Specific Discharge (modeled) [mm/day]'] = q_mod
+
+    # --- Mask to scoring window ---
     q_obs = b.hydrodata['Specific Discharge [mm/day]']
 
     mask = q_mod.notna() & q_obs.notna()
