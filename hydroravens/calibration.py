@@ -1,8 +1,9 @@
 """
 hydroravens.calibration
 ~~~~~~~~~~~~~~~~~~~~~~~
-Run hydroRaVENS with a given parameter set and return a goodness-of-fit
-metric and AIC, optionally scored over a specific date window.
+Run hydroRaVENS with a given parameter set and return a CalibResult
+named tuple containing the goodness-of-fit score, AIC, baseflow index,
+flow duration curve, end-of-run reservoir states, and the Buckets object.
 
 Intended use: call run_and_score() from a Dakota driver or any other
 optimizer. The YAML config passed to cfg must have spin_up_cycles: 0;
@@ -32,7 +33,29 @@ residuals on log-transformed flows and k is the number of free parameters
 passed to run_and_score().  Log-transforming flows makes the Gaussian
 residual assumption more defensible for discharge data.  AIC is intended
 for comparing models with different numbers of reservoirs; lower is better.
+
+Baseflow index (BFI)
+--------------------
+Computed with the Eckhardt (2005) recursive digital filter applied to both
+observed and modelled specific discharge within the scoring window.
+BFI = baseflow volume / total flow volume.  alpha=0.98 and bfi_max=0.80
+are standard values for perennial daily streamflow.
+
+Flow duration curve (FDC)
+--------------------------
+Discharge at 99 evenly-spaced exceedance probabilities (0.5–99.5 %).
+Stored as pd.Series indexed by exceedance probability (%) in both
+CalibResult.fdc_obs and CalibResult.fdc_mod.
+
+Chaining decades
+----------------
+run_and_score() returns final_states, a dict of reservoir water depths and
+snowpack SWE at the end of the scored run.  Pass this as initial_states to
+the next decade's run_and_score() call with spin_up_cycles=0 so that water
+storage is physically continuous across decade boundaries.
 """
+
+from collections import namedtuple
 
 import numpy as np
 import pandas as pd
@@ -41,7 +64,23 @@ from .hydroravens import Buckets
 
 
 # ---------------------------------------------------------------------------
-# Metric and AIC helpers – operate on plain numpy arrays
+# Named tuple for return value
+# ---------------------------------------------------------------------------
+
+CalibResult = namedtuple('CalibResult', [
+    'score',        # float: KGE / NSE / logKGE (higher is better)
+    'aic',          # float: AIC on log-transformed flows (lower is better)
+    'bfi_obs',      # float: observed baseflow index
+    'bfi_mod',      # float: modelled baseflow index
+    'fdc_obs',      # pd.Series: observed flow at exceedance probabilities
+    'fdc_mod',      # pd.Series: modelled flow at exceedance probabilities
+    'final_states', # dict: {'reservoirs': [...], 'snowpack': float}
+    'buckets',      # Buckets object after the final run
+])
+
+
+# ---------------------------------------------------------------------------
+# Metric helpers – operate on plain numpy arrays
 # ---------------------------------------------------------------------------
 
 def _nse(m, o):
@@ -56,23 +95,45 @@ def _kge(m, o):
 
 
 def _log_kge(m, o):
-    eps = 0.01 * o.mean()   # 1 % of mean observed flow; keeps log finite
+    eps = 0.01 * o.mean()
     return _kge(np.log(m + eps), np.log(o + eps))
 
 
 def _aic(m, o, k):
-    """AIC on log-transformed flows with k free parameters."""
     eps        = 0.01 * o.mean()
     ss_res_log = np.sum((np.log(m + eps) - np.log(o + eps)) ** 2)
     n          = len(o)
     return float(n * np.log(ss_res_log / n) + 2 * k)
 
 
-_METRICS = {
-    'NSE':    _nse,
-    'KGE':    _kge,
-    'logKGE': _log_kge,
-}
+def _eckhardt_bfi(q, alpha=0.98, bfi_max=0.80):
+    """
+    Eckhardt (2005) recursive digital filter for baseflow separation.
+    Returns baseflow index = baseflow volume / total flow volume.
+    alpha   : recession constant (~0.98 for daily perennial streams)
+    bfi_max : maximum BFI (0.80 perennial; 0.50 ephemeral)
+    """
+    b     = np.empty_like(q, dtype=float)
+    b[0]  = q[0] * bfi_max
+    denom = 1.0 - alpha * bfi_max
+    for t in range(1, len(q)):
+        b[t] = ((1.0 - bfi_max) * alpha * b[t - 1]
+                + (1.0 - alpha) * bfi_max * q[t]) / denom
+        if b[t] > q[t]:
+            b[t] = q[t]
+    return float(b.sum() / q.sum())
+
+
+_FDC_PROBS = np.arange(0.5, 100.0, 1.0)   # exceedance probabilities (%)
+
+
+def _fdc(q):
+    """pd.Series of discharge at standard exceedance probabilities."""
+    flows = np.percentile(q, 100.0 - _FDC_PROBS)
+    return pd.Series(flows, index=_FDC_PROBS, name='Specific discharge [mm/day]')
+
+
+_METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge}
 
 
 # ---------------------------------------------------------------------------
@@ -80,10 +141,11 @@ _METRICS = {
 # ---------------------------------------------------------------------------
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
-                  melt_factor=None, start=None, end=None, spin_up_cycles=3,
+                  melt_factor=None, initial_states=None,
+                  start=None, end=None, spin_up_cycles=3,
                   metric='KGE'):
     """
-    Run hydroRaVENS and return a goodness-of-fit score and AIC.
+    Run hydroRaVENS and return a CalibResult named tuple.
 
     Parameters
     ----------
@@ -91,47 +153,55 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         Path to a YAML configuration file. Should have spin_up_cycles: 0
         so that spin-up is performed here with the calibrated parameters.
     t_efold : list of float, optional
-        E-folding residence times [days], one entry per reservoir in order
-        from shallowest to deepest. Overrides the values in cfg.
+        E-folding residence times [days], one per reservoir (shallowest
+        first). Overrides the values in cfg.
     f_to_discharge : list of float, optional
-        Fraction of each reservoir's exfiltration that goes directly to
-        streamflow (vs. percolating to the next reservoir). Provide one
-        value per reservoir except the deepest, which must always be 1.0.
-        Overrides the values in cfg.
+        Exfiltration fractions to stream, one per reservoir except the
+        deepest (which is always 1.0). Overrides the values in cfg.
     Hmax : list of float, optional
         Maximum effective water depths [m], one per reservoir. Overrides
         the values in cfg.
     melt_factor : float, optional
         Degree-day snowmelt factor [mm SWE per degC per day]. Overrides
         the value in cfg.
+    initial_states : dict, optional
+        Starting reservoir water depths and snowpack SWE, as returned by
+        a previous call's CalibResult.final_states.  Format::
+
+            {'reservoirs': [H_shallow, H_deep, ...],
+             'snowpack':    H_snow_SWE}
+
+        When provided, these override the H0 values from cfg.  Use with
+        spin_up_cycles=0 when chaining consecutive decades so that water
+        storage is physically continuous.
     start : str or datetime-like, optional
-        Start of the scoring window (inclusive). Both the metric and AIC
-        are computed only over dates >= start. Spin-up still runs the
-        full record.
-    end : str or datetime-like, optional
-        End of the scoring window (inclusive). Both the metric and AIC
-        are computed only over dates <= end. Spin-up still runs the full
+        Start of the scoring window (inclusive). Score, AIC, BFI, and FDC
+        are all computed within this window. Spin-up still uses the full
         record.
+    end : str or datetime-like, optional
+        End of the scoring window (inclusive). Same as start.
     spin_up_cycles : int, optional
         Number of times to loop the full record before the scored run.
-        Default is 3.
+        Default is 3.  Set to 0 when providing initial_states for chained
+        decade runs.
     metric : {'KGE', 'NSE', 'logKGE'}, optional
-        Goodness-of-fit metric to return.  Default is 'KGE'.
+        Goodness-of-fit metric.  Default is 'KGE'.
 
     Returns
     -------
-    score : float
-        Goodness-of-fit (higher is better for all metrics).
-        Returns np.nan if the scoring window contains no valid data.
-    aic : float
-        Akaike Information Criterion on log-transformed flows.
-        k (number of free parameters) is counted from the non-None
-        arguments passed to this function.  Lower AIC is better; use
-        to compare models with different numbers of reservoirs.
-        Returns np.nan if the scoring window contains no valid data.
-    b : Buckets
-        The Buckets object after the final run, available for plotting
-        or further diagnostics.
+    CalibResult
+        Named tuple with fields:
+        score        : goodness-of-fit (higher is better)
+        aic          : AIC on log flows (lower is better; compare across
+                       models with different reservoir counts)
+        bfi_obs      : observed baseflow index (Eckhardt filter)
+        bfi_mod      : modelled baseflow index (Eckhardt filter)
+        fdc_obs      : pd.Series, observed FDC indexed by exceedance %
+        fdc_mod      : pd.Series, modelled FDC indexed by exceedance %
+        final_states : dict suitable for use as initial_states next decade
+        buckets      : Buckets object after the final run
+
+        All scalar fields are np.nan if the scoring window is empty.
 
     Notes
     -----
@@ -167,6 +237,13 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         b.snowpack.melt_factor = melt_factor
         k += 1
 
+    # --- Optional: override initial storage states (for chained decades) ---
+    if initial_states is not None:
+        for i, h in enumerate(initial_states['reservoirs']):
+            b.reservoirs[i].Hwater = h
+        if b.has_snowpack:
+            b.snowpack.Hwater = initial_states.get('snowpack', 0.0)
+
     # --- Spin up on the full record with calibrated parameters ---
     for _ in range(spin_up_cycles):
         b.run()
@@ -174,6 +251,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     # --- Final scored run ---
     b.run()
+
+    # --- Capture end-of-run states for chaining to next decade ---
+    final_states = {
+        'reservoirs': [res.Hwater for res in b.reservoirs],
+        'snowpack':   b.snowpack.Hwater if b.has_snowpack else 0.0,
+    }
 
     # --- Mask to scoring window ---
     q_mod = b.hydrodata['Specific Discharge (modeled) [mm/day]']
@@ -185,13 +268,25 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if end is not None:
         mask &= b.hydrodata['Date'] <= pd.Timestamp(end)
 
+    nan_result = CalibResult(
+        score=np.nan, aic=np.nan,
+        bfi_obs=np.nan, bfi_mod=np.nan,
+        fdc_obs=pd.Series(dtype=float), fdc_mod=pd.Series(dtype=float),
+        final_states=final_states, buckets=b,
+    )
     if mask.sum() == 0:
-        return np.nan, np.nan, b
+        return nan_result
 
     m = np.asarray(q_mod[mask], dtype=float)
     o = np.asarray(q_obs[mask], dtype=float)
 
-    score = _METRICS[metric](m, o)
-    aic   = _aic(m, o, k)
-
-    return score, aic, b
+    return CalibResult(
+        score       = _METRICS[metric](m, o),
+        aic         = _aic(m, o, k),
+        bfi_obs     = _eckhardt_bfi(o),
+        bfi_mod     = _eckhardt_bfi(m),
+        fdc_obs     = _fdc(o),
+        fdc_mod     = _fdc(m),
+        final_states= final_states,
+        buckets     = b,
+    )
