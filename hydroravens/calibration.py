@@ -1,13 +1,29 @@
 """
 hydroravens.calibration
 ~~~~~~~~~~~~~~~~~~~~~~~
-Run hydroRaVENS with a given parameter set and return Nash-Sutcliffe
-Efficiency, optionally scored over a specific date window.
+Run hydroRaVENS with a given parameter set and return a goodness-of-fit
+metric, optionally scored over a specific date window.
 
 Intended use: call run_and_score() from a Dakota driver or any other
 optimizer. The YAML config passed to cfg must have spin_up_cycles: 0;
 spin-up is managed here so calibrated parameters are in effect before
 any simulation runs.
+
+Supported metrics
+-----------------
+'NSE'    Nash-Sutcliffe Efficiency.  Biased toward high flows because its
+         denominator is the variance of observed discharge (dominated by
+         peaks).  Use as a baseline or when peaks are the primary concern.
+
+'KGE'    Kling-Gupta Efficiency.  Decomposes fit into correlation (r),
+         variability ratio (alpha = std_mod/std_obs), and bias ratio
+         (beta = mean_mod/mean_obs), weighting all three equally.
+         Better balanced across the full flow range than NSE.
+
+'logKGE' KGE applied to log-transformed flows.  Shifts sensitivity toward
+         low flows and base flow; useful when base flow matters as much as
+         peaks.  A small epsilon (1 % of mean observed flow) is added
+         before taking logs to avoid log(0).
 """
 
 import numpy as np
@@ -16,10 +32,42 @@ import pandas as pd
 from .hydroravens import Buckets
 
 
+# ---------------------------------------------------------------------------
+# Metric helpers – operate on plain numpy arrays
+# ---------------------------------------------------------------------------
+
+def _nse(m, o):
+    return float(1.0 - np.sum((m - o) ** 2) / np.sum((o - o.mean()) ** 2))
+
+
+def _kge(m, o):
+    r     = np.corrcoef(m, o)[0, 1]
+    alpha = m.std() / o.std()
+    beta  = m.mean() / o.mean()
+    return float(1.0 - np.sqrt((r - 1) ** 2 + (alpha - 1) ** 2 + (beta - 1) ** 2))
+
+
+def _log_kge(m, o):
+    eps = 0.01 * o.mean()   # 1 % of mean observed flow; keeps log finite
+    return _kge(np.log(m + eps), np.log(o + eps))
+
+
+_METRICS = {
+    'NSE':    _nse,
+    'KGE':    _kge,
+    'logKGE': _log_kge,
+}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
-                  melt_factor=None, start=None, end=None, spin_up_cycles=3):
+                  melt_factor=None, start=None, end=None, spin_up_cycles=3,
+                  metric='KGE'):
     """
-    Run hydroRaVENS and return Nash-Sutcliffe Efficiency.
+    Run hydroRaVENS and return a goodness-of-fit score.
 
     Parameters
     ----------
@@ -41,19 +89,21 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         Degree-day snowmelt factor [mm SWE per degC per day]. Overrides
         the value in cfg.
     start : str or datetime-like, optional
-        Start of the scoring window (inclusive). NSE is computed only
-        over dates >= start. Spin-up still runs the full record.
+        Start of the scoring window (inclusive). The metric is computed
+        only over dates >= start. Spin-up still runs the full record.
     end : str or datetime-like, optional
-        End of the scoring window (inclusive). NSE is computed only over
-        dates <= end. Spin-up still runs the full record.
+        End of the scoring window (inclusive). The metric is computed only
+        over dates <= end. Spin-up still runs the full record.
     spin_up_cycles : int, optional
         Number of times to loop the full record before the scored run.
         Default is 3.
+    metric : {'KGE', 'NSE', 'logKGE'}, optional
+        Goodness-of-fit metric to return.  Default is 'KGE'.
 
     Returns
     -------
-    nse : float
-        Nash-Sutcliffe Efficiency over the (optionally windowed) period.
+    score : float
+        Goodness-of-fit (higher is better for all metrics).
         Returns np.nan if the scoring window contains no valid data.
     b : Buckets
         The Buckets object after the final run, available for plotting
@@ -65,6 +115,9 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     ET multiplier (computed per water year during initialize()) remains
     valid and the initial storage state reflects long-run climatology.
     """
+    if metric not in _METRICS:
+        raise ValueError(f"metric must be one of {list(_METRICS)}; got {metric!r}")
+
     b = Buckets()
     b.initialize(cfg)
 
@@ -92,7 +145,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     # --- Final scored run ---
     b.run()
 
-    # --- NSE over the requested window ---
+    # --- Mask to scoring window ---
     q_mod = b.hydrodata['Specific Discharge (modeled) [mm/day]']
     q_obs = b.hydrodata['Specific Discharge [mm/day]']
 
@@ -102,14 +155,11 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if end is not None:
         mask &= b.hydrodata['Date'] <= pd.Timestamp(end)
 
-    q_mod_w = q_mod[mask]
-    q_obs_w = q_obs[mask]
-
     if mask.sum() == 0:
         return np.nan, b
 
-    ss_res = (q_mod_w - q_obs_w).pow(2).sum()
-    ss_tot = (q_obs_w - q_obs_w.mean()).pow(2).sum()
-    nse = float(1.0 - ss_res / ss_tot)
+    m = np.asarray(q_mod[mask], dtype=float)
+    o = np.asarray(q_obs[mask], dtype=float)
 
-    return nse, b
+    score = _METRICS[metric](m, o)
+    return score, b
