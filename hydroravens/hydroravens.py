@@ -658,8 +658,17 @@ class Buckets(object):
         #     https://doi.org/10.1029/WR007i005p01160
         _f0_calibrated = self.reservoirs[0].f_to_discharge
         if self.fdd_threshold < np.inf and self.has_snowpack:
-            T_mean     = self.hydrodata['Mean Temperature [C]'][time_step]
-            self._fgi  = max(0.0, self._fgi - T_mean)
+            T_mean = self.hydrodata['Mean Temperature [C]'][time_step]
+            P      = self.hydrodata['Precipitation [mm/day]'][time_step]
+            # Sensible heat delivered by rain thaws frozen soil in addition
+            # to the air-temperature term.  Rain falls at approximately
+            # T_mean; the thaw equivalent is (c_p / L_f) * T_rain * P_rain,
+            # where c_p = 4186 J kg⁻¹ °C⁻¹ and L_f = 334000 J kg⁻¹.
+            # The max(T_mean, 0) guard ensures only rain (not snow) contributes.
+            # Gray et al. (2001) https://doi.org/10.1002/hyp.320
+            _CP_LF    = 4186.0 / 334000.0          # ≈ 0.01253  [°C⁻¹]
+            rain_thaw = _CP_LF * max(T_mean, 0.0) * P
+            self._fgi = max(0.0, self._fgi - T_mean - rain_thaw)
             if self._fgi > self.fdd_threshold:
                 # Block infiltration: all top-reservoir drainage to runoff
                 self.reservoirs[0].f_to_discharge = 1.0
