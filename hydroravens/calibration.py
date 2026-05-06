@@ -216,7 +216,7 @@ _METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge}
 # ---------------------------------------------------------------------------
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
-                  melt_factor=None, initial_states=None,
+                  melt_factor=None, fdd_threshold=None, initial_states=None,
                   start=None, end=None, spin_up_cycles=3,
                   metric='KGE', routing_N=2, routing_K=None):
     """
@@ -239,6 +239,14 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     melt_factor : float, optional
         Degree-day snowmelt factor [mm SWE per degC per day]. Overrides
         the value in cfg.
+    fdd_threshold : float or None, optional
+        Frozen ground index threshold [°C·day].  The frozen ground index
+        accumulates freezing degree-days and decays during warming
+        (Molnau & Bissell 1983, https://westernsnowconference.org/sites/
+        westernsnowconference.org/PDFs/1983Molnau.pdf).  When the index
+        exceeds fdd_threshold, infiltration from the top reservoir to
+        deeper layers is set to zero for that timestep (all drainage
+        becomes direct runoff).  None (default) disables the effect.
     initial_states : dict, optional
         Starting reservoir water depths and snowpack SWE, as returned by
         a previous call's CalibResult.final_states.  Format::
@@ -324,6 +332,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor
+        k += 1
+
+    if fdd_threshold is not None:
+        b.fdd_threshold = fdd_threshold
         k += 1
 
     if routing_K is not None:

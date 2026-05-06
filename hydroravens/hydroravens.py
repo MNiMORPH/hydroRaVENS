@@ -302,6 +302,11 @@ class Buckets(object):
             self.Chang_I = self._compute_Chang_I(T_monthly_normals)
             self.Chang_a = self._compute_Chang_a(self.Chang_I)
 
+        # Frozen ground index (Molnau & Bissell 1983).  Disabled by default
+        # (threshold = inf); set fdd_threshold after initialize() to activate.
+        self.fdd_threshold = np.inf  # [°C·day]
+        self._fgi          = 0.0    # current frozen ground index [°C·day]
+
     def _compute_Chang_I(self, T_monthly_normals):
         """
         Compute the Thornthwaite thermal index I from long-term monthly normal
@@ -626,6 +631,39 @@ class Buckets(object):
         else:
             # Just declare variable at 0 if no snowpack processes
             qi = 0.
+        # Frozen ground index (FGI): accumulates freezing degree-days,
+        # decays symmetrically during warming.  When FGI > fdd_threshold the
+        # top reservoir's infiltration to deeper layers is blocked (all drainage
+        # becomes direct runoff), simulating frozen-soil reduction of
+        # infiltration capacity.
+        #
+        # FGI(t) = max(0, FGI(t-1) - T_mean(t))
+        #   T_mean < 0  → FGI rises  (freezing degree-days accumulate)
+        #   T_mean > 0  → FGI falls  (thawing erodes the index)
+        #
+        # References
+        # ----------
+        # Molnau, M. and Bissell, V. C. (1983). A continuous frozen ground
+        #     index for flood forecasting. Proc. 51st Annual Western Snow
+        #     Conference, 109–119.
+        #     https://westernsnowconference.org/sites/westernsnowconference.org/
+        #     PDFs/1983Molnau.pdf
+        # Shanley, J. B. and Chalmers, A. (1999). The effect of frozen soil on
+        #     snowmelt runoff at Sleepers River, Vermont. Hydrol. Process.,
+        #     13(12–13), 1843–1857.
+        #     https://doi.org/10.1002/(SICI)1099-1085(199909)13:12/13
+        #     <1843::AID-HYP879>3.0.CO;2-G
+        # Dunne, T. and Black, R. D. (1971). Runoff processes during snowmelt.
+        #     Water Resour. Res., 7(5), 1160–1172.
+        #     https://doi.org/10.1029/WR007i005p01160
+        _f0_calibrated = self.reservoirs[0].f_to_discharge
+        if self.fdd_threshold < np.inf and self.has_snowpack:
+            T_mean     = self.hydrodata['Mean Temperature [C]'][time_step]
+            self._fgi  = max(0.0, self._fgi - T_mean)
+            if self._fgi > self.fdd_threshold:
+                # Block infiltration: all top-reservoir drainage to runoff
+                self.reservoirs[0].f_to_discharge = 1.0
+
         # First, compute snowpack (if being used) and direct discharge
         for i in range(len(self.reservoirs)):
             # Top layer is special: snowmelt and/or precip infiltrates
@@ -659,6 +697,9 @@ class Buckets(object):
                     + self.reservoirs[i-1].H_deficit)
             self.reservoirs[i].discharge(self.dt)
             qi += self.reservoirs[i].H_discharge
+        # Restore calibrated f_to_discharge for the top reservoir
+        self.reservoirs[0].f_to_discharge = _f0_calibrated
+
         # Carry any unmet deficit forward to the next time step
         self.H_deficit = self.reservoirs[-1].H_deficit
 
