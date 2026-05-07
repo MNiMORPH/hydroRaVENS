@@ -396,12 +396,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     o = np.asarray(q_obs[mask], dtype=float)
 
     return CalibResult(
-        score       = _METRICS[metric](m, o),
-        aic         = _aic(m, o, k),
-        bfi_obs     = _eckhardt_bfi(o),
-        bfi_mod     = _eckhardt_bfi(m),
-        fdc_obs     = _fdc(o),
-        fdc_mod     = _fdc(m),
-        final_states= final_states,
-        buckets     = b,
+        score        = _METRICS[metric](m, o),
+        aic          = _aic(m, o, k),
+        bfi_obs      = _eckhardt_bfi(o),
+        bfi_mod      = _eckhardt_bfi(m),
+        fdc_obs      = _fdc(o),
+        fdc_mod      = _fdc(m),
+        final_states = final_states,
+        buckets      = b,
     )

@@ -1,4 +1,5 @@
-from hydroravens import hydroravens
+from . import hydroravens
+
 
 def run():
     hydroravens.main()

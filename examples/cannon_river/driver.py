@@ -7,7 +7,7 @@ import hydroravens
 b = hydroravens.Buckets()
 b.initialize('cannon_cfg.yml')
 b.run()
-b.computeNSE(verbose=True)
+b.compute_NSE(verbose=True)
 b.plot()
 
 #import numpy as np

@@ -15,14 +15,15 @@
 # CLI added by A. Wickert
 # November 2023
 
-import numpy as np
-from matplotlib import pyplot as plt
-import pandas as pd
-import matplotlib.dates as mdates
+import argparse
 import sys
 import warnings
+
+import matplotlib.dates as mdates
+import numpy as np
+import pandas as pd
 import yaml
-import argparse
+from matplotlib import pyplot as plt
 
 # c_p / L_f: water's specific heat divided by the latent heat of fusion.
 # c_p = 4186 J kg⁻¹ °C⁻¹, L_f = 334 000 J kg⁻¹  →  ≈ 0.01253 °C⁻¹
@@ -77,9 +78,9 @@ class Reservoir(object):
         if t_efold <= 0:
             raise ValueError("t_efold must be > 0.")
         if f_to_discharge < 0:
-            raise ValueError("Negative f_to_discharge not possible")
+            raise ValueError("Negative f_to_discharge not possible.")
         elif f_to_discharge > 1:
-            raise ValueError("f_to_discharge: Cannot discharge >100% of water")
+            raise ValueError("f_to_discharge: Cannot discharge >100% of water.")
         elif f_to_discharge == 0:
             warnings.warn("All water infiltrates when f_to_discharge is 0:"+
                           " you may have created a\n"+
@@ -118,13 +119,13 @@ class Reservoir(object):
 
         # What if more water is lost during "recharge" than exists in reservoir?
         # Create a deficit and bring Hwater to 0
-        if self.Hwater+H < 0:
-            self.H_deficit += self.Hwater+H
+        if self.Hwater + H < 0:
+            self.H_deficit += self.Hwater + H
             self.Hwater = 0.
         # What if more water is added than maximum reservoir capacity?
         # Mark excess (straight to runoff) and bring Hwater to Hmax
-        elif self.Hwater+H > self.Hmax:
-            self.H_excess += self.Hwater+H - self.Hmax
+        elif self.Hwater + H > self.Hmax:
+            self.H_excess += self.Hwater + H - self.Hmax
             self.Hwater = self.Hmax
         # Otherwise, we're in a range in which 0 <= H <= Hmax
         # Yay! Things are easier!
@@ -232,10 +233,8 @@ class Snowpack(object):
                 # This is then directly passed to the first layer of the
                 # set of hydrological reservoirs
                 self.H_infiltrated = H
-        # If negative recharge, take from snowpack, and then from reservoirs
-        # in order from top to bottom. If no water is in the bottom reservoir,
-        # this deficit will be handled first, but will not produce discharge
-
+        # If negative recharge: remove water from snowpack via sublimation.
+        # Any deficit beyond available SWE is passed down as H_deficit.
         else:
             # Sublimation (effectively) if snow present;
             # Otherwise pass water deficit
@@ -467,7 +466,6 @@ class Buckets(object):
                 H0 = self.cfg['initial_conditions']['water_reservoir_effective_depths__m'][i]
             )
             for i in range(self.n_reservoirs)]
-        # Python note: This is a compact way of a loop and using append()
 
         # Check if bottom reservoir discharges all to river: conserve mass.
         # But allow through with a warning in case the user wants a
@@ -506,7 +504,7 @@ class Buckets(object):
         # Initial conditions if resuming from prior run
         if self.has_snowpack:
             self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
-        # H0 in loop above.
+        # Reservoir H0 values are set in the list comprehension above.
 
         # Check that dt is 1 day everywhere.
         # Do not work otherwise.
@@ -597,7 +595,7 @@ class Buckets(object):
         Assembles ET in two steps:
 
         1. Obtain raw daily ET from the input data file or the
-           Thornthwaite–Chang 2019 equation (see evapotranspirationChang2019()).
+           Thornthwaite–Chang 2019 equation (see evapotranspiration_Chang2019()).
         2. Scale raw ET by the per-water-year multiplier from
            compute_ET_multiplier() so that P - Q - ET ≈ 0 in each water year.
 
@@ -606,7 +604,7 @@ class Buckets(object):
         if self.et_method == 'datafile':
             _raw_ET = self.hydrodata['Evapotranspiration [mm/day]']
         elif self.et_method == 'ThorntwaiteChang2019':
-            _raw_ET = self.evapotranspirationChang2019()
+            _raw_ET = self.evapotranspiration_Chang2019()
         else:
             raise ValueError('evapotranspiration_method must be "datafile" or '+
                              '"ThorntwaiteChang2019".')
@@ -767,7 +765,7 @@ class Buckets(object):
         self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = (
             np.sum([res.Hwater for res in self.reservoirs]))
 
-    def evapotranspirationChang2019(self, Tmax=None, Tmin=None, photoperiod=None,
+    def evapotranspiration_Chang2019(self, Tmax=None, Tmin=None, photoperiod=None,
                                     k=0.69):
         """
         Modified daily Thornthwaite ET₀ equation.
@@ -826,14 +824,14 @@ class Buckets(object):
         """
         Report model skill and display output plots.
 
-        Calls computeNSE(verbose=True) to print the Nash–Sutcliffe Efficiency
+        Calls compute_NSE(verbose=True) to print the Nash–Sutcliffe Efficiency
         to stdout, then calls plot() to display a time-series comparison of
         observed and modeled specific discharge. Part of the CSDMS Basic Model
         Interface.
         """
         # Goodness of fit
         # Add options to print and/or save values later
-        self.computeNSE(verbose=True)
+        self.compute_NSE(verbose=True)
         # Plot
         # Add flag for plotting (or not) later
         self.plot()
@@ -914,7 +912,7 @@ class Buckets(object):
 
         return excess_mass_in_model
 
-    def computeNSE(self, return_nse=True, verbose=False):
+    def compute_NSE(self, return_nse=True, verbose=False):
         """
         Compute the Nash–Sutcliffe Efficiency of the discharge simulation.
 
@@ -937,8 +935,7 @@ class Buckets(object):
             observed-mean predictor.
         """
 
-        # Shorthand for fcn
-        q_data = self.hydrodata['Specific Discharge [mm/day]']
+        q_data  = self.hydrodata['Specific Discharge [mm/day]']
         q_model = self.hydrodata['Specific Discharge (modeled) [mm/day]']
 
         # Calculate NSE
