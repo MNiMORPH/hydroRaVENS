@@ -24,6 +24,11 @@ import warnings
 import yaml
 import argparse
 
+# c_p / L_f: water's specific heat divided by the latent heat of fusion.
+# c_p = 4186 J kg⁻¹ °C⁻¹, L_f = 334 000 J kg⁻¹  →  ≈ 0.01253 °C⁻¹
+# Gives mm SWE melted per mm of rain per °C of rain temperature.
+_CP_LF = 4186.0 / 334000.0
+
 
 class Reservoir(object):
     """
@@ -241,32 +246,66 @@ class Snowpack(object):
                 self.Hwater = 0
             self.H_infiltrated = 0.
 
-    def discharge(self, dt):
+    def melt(self, dt, P=0.0):
         """
-        Compute snowmelt and route it to the top subsurface reservoir.
+        Compute positive-degree-day and rain-on-snow melt; update state.
 
-        Melt is computed using the positive-degree-day method and added
-        to H_infiltrated. All melt infiltrates to the top reservoir;
-        direct snowmelt runoff to the river is not modeled. H_discharge
-        is always 0 for the snowpack.
+        Both terms are routed to H_infiltrated (→ top soil reservoir). If
+        total available energy exceeds the SWE present, the leftover is
+        returned as equivalent degree-days so the caller can credit it
+        toward frozen-soil thawing (FGI reduction) rather than losing it.
+
+        Rain-on-snow sensible heat: water arriving at T_mean > 0 °C
+        carries (c_p / L_f) · T · P mm SWE of latent-heat capacity.
+        Spring snowpacks are near-isothermal at 0 °C, so cold-content
+        corrections are negligible and the latent-heat term dominates.
+
+        References
+        ----------
+        McCabe et al. (2007) doi:10.1175/BAMS-88-3-319
+        Würzer et al. (2016) doi:10.1175/JHM-D-15-0181.1
 
         Parameters
         ----------
         dt : float
-            Time step duration (days).
+            Timestep [days].
+        P : float, optional
+            Raw liquid precipitation [mm/day]. Used to compute rain-on-snow
+            sensible-heat melt. Default 0 (PDD only).
 
-        Notes
-        -----
-        Routing all melt to infiltration is a simplification that
-        neglects surface runoff from melt atop frozen or saturated soil.
+        Returns
+        -------
+        excess_dd : float
+            Leftover melt energy after the snowpack is exhausted, expressed
+            as degree-day equivalent [°C·day] = leftover mm SWE / melt_factor.
+            Zero when SWE is not fully depleted.
         """
-        if self.T > 0:
-            dH_melt = np.min((self.Hwater, self.melt_factor * self.T * dt))
+        if self.T <= 0:
+            self.H_discharge = 0.
+            return 0.0
+
+        pdd_avail   = self.melt_factor * self.T * dt    # [mm SWE]
+        ros_avail   = _CP_LF * self.T * P               # [mm SWE] rain-on-snow
+        total_avail = pdd_avail + ros_avail
+
+        if total_avail <= self.Hwater:
+            actual_melt = total_avail
+            excess_dd   = 0.0
         else:
-            dH_melt = 0.
-        self.H_infiltrated += dH_melt
-        self.H_discharge = 0.
-        self.Hwater -= dH_melt
+            actual_melt = self.Hwater
+            # Leftover energy → °C·day equivalent for soil-thaw credit
+            excess_dd = (total_avail - actual_melt) / self.melt_factor
+
+        self.H_infiltrated += actual_melt
+        self.H_discharge    = 0.
+        self.Hwater        -= actual_melt
+        return excess_dd
+
+    def discharge(self, dt):
+        """
+        Backward-compatible PDD-only melt. Calls melt(dt, P=0); see melt().
+        """
+        self.melt(dt, P=0.0)
 
 
 class Buckets(object):
@@ -580,6 +619,79 @@ class Buckets(object):
         self.hydrodata['ET for model [mm/day]'] = (
             _raw_ET * self.hydrodata['ET multiplier'])
 
+    def _compute_snowpack(self, time_step):
+        """
+        Update the snowpack for one timestep; return excess melt energy.
+
+        Sets temperature, applies net water input, then calls melt() with
+        the raw precipitation so rain-on-snow sensible heat is included.
+        Updates self.H_deficit from the snowpack before returning.
+
+        Returns
+        -------
+        excess_dd : float
+            Leftover melt energy [°C·day] after SWE is fully depleted.
+            Pass to _update_fgi() to credit toward frozen-soil thawing.
+        """
+        T = self.hydrodata['Mean Temperature [C]'][time_step]
+        P = self.hydrodata['Precipitation [mm/day]'][time_step]
+        self.snowpack.set_temperature(T)
+        self.snowpack.recharge(
+            P - self.hydrodata['ET for model [mm/day]'][time_step]
+            + self.H_deficit
+        )
+        excess_dd = self.snowpack.melt(self.dt, P=P)
+        self.H_deficit = self.snowpack.H_deficit
+        return excess_dd
+
+    def _update_fgi(self, time_step, excess_dd=0.0):
+        """
+        Update the frozen ground index; flag top reservoir as frozen if needed.
+
+        FGI(t) = max(0, FGI(t-1) - T_mean - excess_dd)
+          T_mean < 0  → FGI rises  (freezing degree-days accumulate)
+          T_mean > 0  → FGI falls  (warm air thaws)
+          excess_dd   → additional thaw credited from leftover snowmelt
+                        energy [°C·day] = leftover mm SWE / melt_factor
+
+        When FGI exceeds fdd_threshold, the top reservoir's f_to_discharge
+        is set to 1.0 so all drainage becomes direct runoff, simulating
+        frozen-soil blockage of deep infiltration.
+
+        References
+        ----------
+        Molnau & Bissell (1983) https://westernsnowconference.org/sites/
+            westernsnowconference.org/PDFs/1983Molnau.pdf
+        Shanley & Chalmers (1999) doi:10.1002/(SICI)1099-1085(199909)13:12/13
+            <1843::AID-HYP879>3.0.CO;2-G
+        Dunne & Black (1971) doi:10.1029/WR007i005p01160
+
+        Parameters
+        ----------
+        time_step : int
+            Current row index in self.hydrodata.
+        excess_dd : float, optional
+            Degree-day equivalent of leftover melt energy from
+            _compute_snowpack() [°C·day]. Reduces FGI alongside air
+            temperature. Default 0 (temperature-only FGI, per Molnau &
+            Bissell).
+
+        Returns
+        -------
+        f0 : float
+            Calibrated f_to_discharge of the top reservoir, saved before any
+            frozen-ground override. Restore it after the discharge loop.
+        """
+        f0 = self.reservoirs[0].f_to_discharge
+        if np.isinf(self.fdd_threshold):
+            return f0
+
+        T = self.hydrodata['Mean Temperature [C]'][time_step]
+        self._fgi = max(0.0, self._fgi - T - excess_dd)
+        if self._fgi > self.fdd_threshold:
+            self.reservoirs[0].f_to_discharge = 1.0
+        return f0
+
     def update(self, time_step=None):
         """
         Advance the model by one time step.
@@ -604,115 +716,18 @@ class Buckets(object):
             uses and then increments the internal counter self._timestep_i.
         """
 
-        # time_step sets the index of the row in the Pandas DataFrame
-        # that will be used to update, run, and store the outputs
         if time_step is None:
             time_step = self._timestep_i
-            # Advance internal variable if external time step is not selected
+            # Advance internal variable if external time step is not selected.
             # This should be a different variable and therefore not
-            # modify the value of "time_step" by reference
+            # modify the value of "time_step" by reference.
             self._timestep_i += 1
 
-        # If no mean temperature included, no snowpack processes simulated
-        if self.has_snowpack:
-            self.snowpack.set_temperature(
-                    self.hydrodata['Mean Temperature [C]'][time_step])
-            # Recharge P - ET + running deficit (neg if deficit exists)
-            self.snowpack.recharge(
-                    self.hydrodata['Precipitation [mm/day]'][time_step] -
-                    self.hydrodata['ET for model [mm/day]'][time_step]
-                    + self.H_deficit)
-            self.snowpack.discharge(self.dt)
-            # Specific discharge from snowpack
-            qi = self.snowpack.H_discharge
-            # An existing deficit will cause H_deficit to be negative
-            # H_deficit is updated based on snowpack processes
-            self.H_deficit = self.snowpack.H_deficit
-        else:
-            # Just declare variable at 0 if no snowpack processes
-            qi = 0.
-        # Frozen ground index (FGI): accumulates freezing degree-days,
-        # decays symmetrically during warming.  When FGI > fdd_threshold the
-        # top reservoir's infiltration to deeper layers is blocked (all drainage
-        # becomes direct runoff), simulating frozen-soil reduction of
-        # infiltration capacity.
-        #
-        # FGI(t) = max(0, FGI(t-1) - T_mean(t))
-        #   T_mean < 0  → FGI rises  (freezing degree-days accumulate)
-        #   T_mean > 0  → FGI falls  (thawing erodes the index)
-        #
-        # References
-        # ----------
-        # Molnau, M. and Bissell, V. C. (1983). A continuous frozen ground
-        #     index for flood forecasting. Proc. 51st Annual Western Snow
-        #     Conference, 109–119.
-        #     https://westernsnowconference.org/sites/westernsnowconference.org/
-        #     PDFs/1983Molnau.pdf
-        # Shanley, J. B. and Chalmers, A. (1999). The effect of frozen soil on
-        #     snowmelt runoff at Sleepers River, Vermont. Hydrol. Process.,
-        #     13(12–13), 1843–1857.
-        #     https://doi.org/10.1002/(SICI)1099-1085(199909)13:12/13
-        #     <1843::AID-HYP879>3.0.CO;2-G
-        # Dunne, T. and Black, R. D. (1971). Runoff processes during snowmelt.
-        #     Water Resour. Res., 7(5), 1160–1172.
-        #     https://doi.org/10.1029/WR007i005p01160
-        # c_p / L_f: ratio of water's specific heat to latent heat of fusion.
-        # Gives melt equivalent [mm SWE] per mm rain per °C air temperature.
-        # c_p = 4186 J kg⁻¹ °C⁻¹, L_f = 334 000 J kg⁻¹  →  ≈ 0.01253 °C⁻¹
-        _CP_LF         = 4186.0 / 334000.0
-        _f0_calibrated = self.reservoirs[0].f_to_discharge
+        excess_dd = self._compute_snowpack(time_step) if self.has_snowpack else 0.0
+        f0 = self._update_fgi(time_step, excess_dd)
 
-        if self.has_snowpack:
-            T_mean = self.hydrodata['Mean Temperature [C]'][time_step]
-            P      = self.hydrodata['Precipitation [mm/day]'][time_step]
-
-            # Rain-on-snow: sensible heat carried by rain melts additional SWE.
-            # The rain arrives at approximately T_mean; the extra melt is
-            #   ΔmeltSWE = (c_p / L_f) · T_rain · P_rain  [mm SWE]
-            # Spring snowpacks are near-isothermal at 0 °C, so cold content
-            # (Q_c = 2090 · |T_snow| · SWE) is negligible and the latent-heat
-            # term dominates.  Energy going into snowmelt is NOT available for
-            # thawing frozen soil, so _rain_thaw_soil is set to zero when snow
-            # is present.
-            #
-            # McCabe, G. J., Hay, L. E. and Clark, M. P. (2007). Rain-on-snow
-            #     events in the western United States. Bull. Amer. Meteor. Soc.,
-            #     88(3), 319–328.  https://doi.org/10.1175/BAMS-88-3-319
-            # Würzer, S., Jonas, T., Wever, N. and Lehning, M. (2016). Influence
-            #     of initial snowpack properties on runoff formation during
-            #     rain-on-snow events. J. Hydrometeorol., 17(6), 1801–1815.
-            #     https://doi.org/10.1175/JHM-D-15-0181.1
-            _rain_thaw_soil = 0.0
-            if T_mean > 0.0 and P > 0.0:
-                extra_melt_avail = _CP_LF * T_mean * P
-                if self.snowpack.Hwater > 0.0:
-                    extra_melt = min(extra_melt_avail, self.snowpack.Hwater)
-                    self.snowpack.Hwater        -= extra_melt
-                    self.snowpack.H_infiltrated += extra_melt
-                    # energy consumed by snowmelt; none left for soil thaw
-                else:
-                    # No snow: rain energy available for frozen-soil thaw
-                    _rain_thaw_soil = extra_melt_avail
-
-            # Frozen ground index (FGI) update.
-            # Rain-on-snow events contribute zero thaw energy to the soil.
-            if self.fdd_threshold < np.inf:
-                self._fgi = max(0.0, self._fgi - T_mean - _rain_thaw_soil)
-                if self._fgi > self.fdd_threshold:
-                    self.reservoirs[0].f_to_discharge = 1.0
-        elif self.fdd_threshold < np.inf:
-            # No snowpack module: FGI still active, rain thaws soil directly.
-            T_mean = self.hydrodata['Mean Temperature [C]'][time_step]
-            P      = self.hydrodata['Precipitation [mm/day]'][time_step]
-            rain_thaw = _CP_LF * max(T_mean, 0.0) * P
-            self._fgi = max(0.0, self._fgi - T_mean - rain_thaw)
-            if self._fgi > self.fdd_threshold:
-                self.reservoirs[0].f_to_discharge = 1.0
-
-        # First, compute snowpack (if being used) and direct discharge
+        qi = 0.0
         for i in range(len(self.reservoirs)):
-            # Top layer is special: snowmelt and/or precip infiltrates
-            # immediately (at least on our daily time scales)
             if i == 0:
                 if self.has_snowpack:
                     self.reservoirs[i].recharge(self.snowpack.H_infiltrated
@@ -742,10 +757,8 @@ class Buckets(object):
                     + self.reservoirs[i-1].H_deficit)
             self.reservoirs[i].discharge(self.dt)
             qi += self.reservoirs[i].H_discharge
-        # Restore calibrated f_to_discharge for the top reservoir
-        self.reservoirs[0].f_to_discharge = _f0_calibrated
 
-        # Carry any unmet deficit forward to the next time step
+        self.reservoirs[0].f_to_discharge = f0
         self.H_deficit = self.reservoirs[-1].H_deficit
 
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
