@@ -656,21 +656,57 @@ class Buckets(object):
         # Dunne, T. and Black, R. D. (1971). Runoff processes during snowmelt.
         #     Water Resour. Res., 7(5), 1160–1172.
         #     https://doi.org/10.1029/WR007i005p01160
+        # c_p / L_f: ratio of water's specific heat to latent heat of fusion.
+        # Gives melt equivalent [mm SWE] per mm rain per °C air temperature.
+        # c_p = 4186 J kg⁻¹ °C⁻¹, L_f = 334 000 J kg⁻¹  →  ≈ 0.01253 °C⁻¹
+        _CP_LF         = 4186.0 / 334000.0
         _f0_calibrated = self.reservoirs[0].f_to_discharge
-        if self.fdd_threshold < np.inf and self.has_snowpack:
+
+        if self.has_snowpack:
             T_mean = self.hydrodata['Mean Temperature [C]'][time_step]
             P      = self.hydrodata['Precipitation [mm/day]'][time_step]
-            # Sensible heat delivered by rain thaws frozen soil in addition
-            # to the air-temperature term.  Rain falls at approximately
-            # T_mean; the thaw equivalent is (c_p / L_f) * T_rain * P_rain,
-            # where c_p = 4186 J kg⁻¹ °C⁻¹ and L_f = 334000 J kg⁻¹.
-            # The max(T_mean, 0) guard ensures only rain (not snow) contributes.
-            # Gray et al. (2001) https://doi.org/10.1002/hyp.320
-            _CP_LF    = 4186.0 / 334000.0          # ≈ 0.01253  [°C⁻¹]
+
+            # Rain-on-snow: sensible heat carried by rain melts additional SWE.
+            # The rain arrives at approximately T_mean; the extra melt is
+            #   ΔmeltSWE = (c_p / L_f) · T_rain · P_rain  [mm SWE]
+            # Spring snowpacks are near-isothermal at 0 °C, so cold content
+            # (Q_c = 2090 · |T_snow| · SWE) is negligible and the latent-heat
+            # term dominates.  Energy going into snowmelt is NOT available for
+            # thawing frozen soil, so _rain_thaw_soil is set to zero when snow
+            # is present.
+            #
+            # McCabe, G. J., Hay, L. E. and Clark, M. P. (2007). Rain-on-snow
+            #     events in the western United States. Bull. Amer. Meteor. Soc.,
+            #     88(3), 319–328.  https://doi.org/10.1175/BAMS-88-3-319
+            # Würzer, S., Jonas, T., Wever, N. and Lehning, M. (2016). Influence
+            #     of initial snowpack properties on runoff formation during
+            #     rain-on-snow events. J. Hydrometeorol., 17(6), 1801–1815.
+            #     https://doi.org/10.1175/JHM-D-15-0181.1
+            _rain_thaw_soil = 0.0
+            if T_mean > 0.0 and P > 0.0:
+                extra_melt_avail = _CP_LF * T_mean * P
+                if self.snowpack.Hwater > 0.0:
+                    extra_melt = min(extra_melt_avail, self.snowpack.Hwater)
+                    self.snowpack.Hwater        -= extra_melt
+                    self.snowpack.H_infiltrated += extra_melt
+                    # energy consumed by snowmelt; none left for soil thaw
+                else:
+                    # No snow: rain energy available for frozen-soil thaw
+                    _rain_thaw_soil = extra_melt_avail
+
+            # Frozen ground index (FGI) update.
+            # Rain-on-snow events contribute zero thaw energy to the soil.
+            if self.fdd_threshold < np.inf:
+                self._fgi = max(0.0, self._fgi - T_mean - _rain_thaw_soil)
+                if self._fgi > self.fdd_threshold:
+                    self.reservoirs[0].f_to_discharge = 1.0
+        elif self.fdd_threshold < np.inf:
+            # No snowpack module: FGI still active, rain thaws soil directly.
+            T_mean = self.hydrodata['Mean Temperature [C]'][time_step]
+            P      = self.hydrodata['Precipitation [mm/day]'][time_step]
             rain_thaw = _CP_LF * max(T_mean, 0.0) * P
             self._fgi = max(0.0, self._fgi - T_mean - rain_thaw)
             if self._fgi > self.fdd_threshold:
-                # Block infiltration: all top-reservoir drainage to runoff
                 self.reservoirs[0].f_to_discharge = 1.0
 
         # First, compute snowpack (if being used) and direct discharge
