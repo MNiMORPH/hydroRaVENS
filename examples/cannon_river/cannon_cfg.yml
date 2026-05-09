@@ -16,11 +16,11 @@ timeseries:
         datafile: CannonTestInput.csv
 
 initial_conditions:
-        # Initial guesses
-        water_reservoir_effective_depths__m:
+        # Initial guesses [mm] -- effective water-column equivalents, not physical thicknesses
+        water_reservoir_effective_depths__mm:
                 - 2
                 - 400
-        snowpack__m_SWE: 0
+        snowpack__mm_SWE: 0
 
 catchment:
         drainage_basin_area__km2: 3800
@@ -49,7 +49,7 @@ reservoirs:
         exfiltration_fractions:
                 - 0.8
                 - 1.0
-        maximum_effective_depths__m:
+        maximum_effective_depths__mm:     # [mm] effective water-column equivalents
                 - .inf
                 - .inf
 

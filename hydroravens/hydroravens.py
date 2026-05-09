@@ -443,27 +443,27 @@ class Buckets(object):
         # First, check if all reservoirs have the same length
         for _key in self.cfg['reservoirs'].keys():
             if len(self.cfg['reservoirs'][_key]) == \
-                    len(self.cfg['initial_conditions']['water_reservoir_effective_depths__m']):
+                    len(self.cfg['initial_conditions']['water_reservoir_effective_depths__mm']):
                 pass
             else:
                 raise ValueError(_key + ' within "reservoirs" contains a\n'+
                                  'different number of entries, implying'+
                                  'a different number of subsurface water\n'+
                                  'reservoirs, than '+
-                                 'water_reservoir_effective_depths__m'+
+                                 'water_reservoir_effective_depths__mm'+
                                  ' within "initial_conditions".')
 
         # If all are the same length, then we will assign a number of reservoirs
         self.n_reservoirs = len(
-            self.cfg['initial_conditions']['water_reservoir_effective_depths__m'])
+            self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'])
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
         self.reservoirs = [
             Reservoir(
                 t_efold = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
                 f_to_discharge = self.cfg['reservoirs']['exfiltration_fractions'][i],
-                Hmax = self.cfg['reservoirs']['maximum_effective_depths__m'][i],
-                H0 = self.cfg['initial_conditions']['water_reservoir_effective_depths__m'][i]
+                Hmax = self.cfg['reservoirs']['maximum_effective_depths__mm'][i],
+                H0   = self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'][i],
             )
             for i in range(self.n_reservoirs)]
 
@@ -503,7 +503,7 @@ class Buckets(object):
 
         # Initial conditions if resuming from prior run
         if self.has_snowpack:
-            self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__m_SWE']
+            self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__mm_SWE']
         # Reservoir H0 values are set in the list comprehension above.
 
         # Check that dt is 1 day everywhere.
@@ -548,10 +548,7 @@ class Buckets(object):
 
         # Model spin-up, if requested
         for _ in range(self.n_spin_up_cycles):
-            self.run()  # Spin-up
-            # Later allow user-selected starting and ending time steps
-            # For now, just the whole series
-            self._timestep_i = self.hydrodata.index[0]  # Restart
+            self.run()  # Spin-up; run() resets _timestep_i each call
 
     def compute_water_year(self):
         """
@@ -587,6 +584,16 @@ class Buckets(object):
                          self.hydrodata_WY_means['Precipitation [mm/day]'])
         self.hydrodata_WY_means['ET multiplier'] = (
             _ET_required / self.hydrodata_WY_means['Evapotranspiration [mm/day]'])
+
+        _bad_wy = self.hydrodata_WY_means.index[
+            self.hydrodata_WY_means['ET multiplier'] <= 0]
+        if len(_bad_wy) > 0:
+            warnings.warn(
+                f"ET multiplier <= 0 in water year(s) {list(_bad_wy)}. "
+                "Annual discharge exceeds precipitation for those years; "
+                "scaled ET will be zero or negative (water-generating). "
+                "Check gauge data or consider removing those years."
+            )
 
     def compute_ET(self):
         """
@@ -814,9 +821,16 @@ class Buckets(object):
         """
         Advance the model through all time steps in self.hydrodata.
 
-        Calls update() sequentially for every row in self.hydrodata, beginning
-        from self._timestep_i. Part of the CSDMS Basic Model Interface.
+        Resets the internal time counter to the first row before iterating,
+        so run() is safe to call more than once (e.g. spin-up then main run).
+        Captures storage at the start of the run for check_mass_balance().
+        Part of the CSDMS Basic Model Interface.
         """
+        self._timestep_i = self.hydrodata.index[0]
+        self._run_initial_storage = (
+            sum(res.Hwater for res in self.reservoirs)
+            + (self.snowpack.Hwater if self.has_snowpack else 0.0)
+        )
         for _ in self.hydrodata.index:
             self.update()
 
@@ -906,9 +920,14 @@ class Buckets(object):
         # Carried-over water deficit
         deficit = self.H_deficit
 
-        # Discrepancy
+        # Initial storage at the start of the last run() call (not at initialize()
+        # time, since spin-up changes storage before the scored run begins).
+        initial_storage = getattr(self, '_run_initial_storage', 0.0)
+
+        # Discrepancy: inputs = outputs + ΔS, so excess ≈ 0 when mass is conserved.
         excess_mass_in_model = (outlet_discharge + subsurface_storage
-                                + snow_storage - total_additions + deficit)
+                                + snow_storage - total_additions + deficit
+                                - initial_storage)
 
         return excess_mass_in_model
 

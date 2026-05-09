@@ -332,6 +332,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor
+        b.melt_factor = melt_factor  # keep Buckets-level attribute in sync
         k += 1
 
     if fdd_threshold is not None:
