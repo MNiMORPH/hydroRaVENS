@@ -248,15 +248,17 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         deeper layers is set to zero for that timestep (all drainage
         becomes direct runoff).  None (default) disables the effect.
     initial_states : dict, optional
-        Starting reservoir water depths and snowpack SWE, as returned by
-        a previous call's CalibResult.final_states.  Format::
+        Starting reservoir water depths, snowpack SWE, and frozen ground
+        index, as returned by a previous call's CalibResult.final_states.
+        Format::
 
             {'reservoirs': [H_shallow, H_deep, ...],
-             'snowpack':    H_snow_SWE}
+             'snowpack':    H_snow_SWE,
+             'fgi':         frozen_ground_index}
 
         When provided, these override the H0 values from cfg.  Use with
         spin_up_cycles=0 when chaining consecutive decades so that water
-        storage is physically continuous.
+        storage and frozen-ground state are physically continuous.
     start : str or datetime-like, optional
         Start of the scoring window (inclusive). Score, AIC, BFI, and FDC
         are all computed within this window. Spin-up still uses the full
@@ -348,6 +350,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
             b.reservoirs[i].Hwater = h
         if b.has_snowpack:
             b.snowpack.Hwater = initial_states.get('snowpack', 0.0)
+        b._fgi = initial_states.get('fgi', 0.0)
 
     # --- Spin up on the full record with calibrated parameters ---
     for _ in range(spin_up_cycles):
@@ -361,6 +364,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     final_states = {
         'reservoirs': [res.Hwater for res in b.reservoirs],
         'snowpack':   b.snowpack.Hwater if b.has_snowpack else 0.0,
+        'fgi':        b._fgi,
     }
 
     # --- Optional: route total runoff through Nash cascade ---

@@ -529,11 +529,11 @@ class Buckets(object):
         # for example
         self._timestep_i = self.hydrodata.index[0]
 
-        # If there is a water-supply deficit (ET > P) that is larger than
-        # any existing water reservoirs, note this in this variable.
-        # Important: This is the cumulative H_deficit, whereas
-        # class Snowpack's H_deficit is for that time step only.
-        self.H_deficit = 0.
+        # Carry-over of any water deficit from the previous timestep that the
+        # deepest reservoir could not satisfy (ET > P + all storage).  This is
+        # the unpaid debt passed forward one step; distinct from
+        # Reservoir.H_deficit and Snowpack.H_deficit, which are per-timestep only.
+        self.H_deficit_carry = 0.
 
         # Compute the water years based on the input month for
         # water-year rollover
@@ -621,8 +621,10 @@ class Buckets(object):
         self.hydrodata = self.hydrodata.merge(
             self.hydrodata_WY_means['ET multiplier'],
             on='Water Year')
+        # Use .to_numpy() to multiply by position rather than pandas index, so
+        # that any index reset from the merge cannot silently misalign rows.
         self.hydrodata['ET for model [mm/day]'] = (
-            _raw_ET * self.hydrodata['ET multiplier'])
+            _raw_ET.to_numpy() * self.hydrodata['ET multiplier'].to_numpy())
 
     def _compute_snowpack(self, time_step):
         """
@@ -630,7 +632,7 @@ class Buckets(object):
 
         Sets temperature, applies net water input, then calls melt() with
         the raw precipitation so rain-on-snow sensible heat is included.
-        Updates self.H_deficit from the snowpack before returning.
+        Updates self.H_deficit_carry from the snowpack before returning.
 
         Returns
         -------
@@ -643,10 +645,10 @@ class Buckets(object):
         self.snowpack.set_temperature(T)
         self.snowpack.recharge(
             P - self.hydrodata['ET for model [mm/day]'][time_step]
-            + self.H_deficit
+            + self.H_deficit_carry
         )
         excess_dd = self.snowpack.melt(self.dt, P=P)
-        self.H_deficit = self.snowpack.H_deficit
+        self.H_deficit_carry = self.snowpack.H_deficit
         return excess_dd
 
     def _update_fgi(self, time_step, excess_dd=0.0):
@@ -691,6 +693,11 @@ class Buckets(object):
         if np.isinf(self.fdd_threshold):
             return f0
 
+        if 'Mean Temperature [C]' not in self.hydrodata.columns:
+            raise ValueError(
+                "fdd_threshold is set but 'Mean Temperature [C]' is missing "
+                "from the input data. FGI requires temperature data."
+            )
         T = self.hydrodata['Mean Temperature [C]'][time_step]
         self._fgi = max(0.0, self._fgi - T - excess_dd)
         if self._fgi > self.fdd_threshold:
@@ -736,12 +743,12 @@ class Buckets(object):
             if i == 0:
                 if self.has_snowpack:
                     self.reservoirs[i].recharge(self.snowpack.H_infiltrated
-                                                + self.H_deficit)
+                                                + self.H_deficit_carry)
                 else:
                     self.reservoirs[i].recharge(
                         self.hydrodata['Precipitation [mm/day]'][time_step] -
                         self.hydrodata['ET for model [mm/day]'][time_step] +
-                        self.H_deficit
+                        self.H_deficit_carry
                     )
             else:
                 # Let water infiltrate to lower layers effectively
@@ -764,7 +771,7 @@ class Buckets(object):
             qi += self.reservoirs[i].H_discharge
 
         self.reservoirs[0].f_to_discharge = f0
-        self.H_deficit = self.reservoirs[-1].H_deficit
+        self.H_deficit_carry = self.reservoirs[-1].H_deficit
 
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
         if self.has_snowpack:
@@ -917,8 +924,8 @@ class Buckets(object):
         # Mass removal
         outlet_discharge = self.hydrodata[
             'Specific Discharge (modeled) [mm/day]'][:time_step+1].sum()
-        # Carried-over water deficit
-        deficit = self.H_deficit
+        # Unpaid water deficit carried forward from the last timestep
+        deficit = self.H_deficit_carry
 
         # Initial storage at the start of the last run() call (not at initialize()
         # time, since spin-up changes storage before the scored run begins).
