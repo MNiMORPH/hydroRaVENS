@@ -119,7 +119,7 @@ The ``general`` section
      - int
      - Number of complete passes through data before the main run. Use 0 to
        skip spin-up.
-   * - ``scale_et``
+   * - ``enforce_water_balance``
      - bool
      - Scale ET by a per-water-year multiplier so that P − Q − ET = 0 over
        each water year. Default ``true``. Set to ``false`` only when
@@ -133,7 +133,7 @@ Example:
 
     general:
         spin_up_cycles: 2  # Run through data twice to initialize
-        scale_et: true     # default; omit to accept the default
+        enforce_water_balance: true     # default; omit to accept the default
 
 The ``reservoirs`` section
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

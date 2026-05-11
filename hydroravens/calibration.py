@@ -256,7 +256,8 @@ _METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge}
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   melt_factor=None, fdd_threshold=None, initial_states=None,
                   start=None, end=None, spin_up_cycles=3,
-                  metric='KGE', routing_N=2, routing_K=None):
+                  metric='KGE', routing_N=2, routing_K=None,
+                  enforce_water_balance=True):
     """
     Run hydroRaVENS and return a CalibResult named tuple.
 
@@ -323,6 +324,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         applied and the model output is compared directly to observed
         discharge.  When provided, routing_K is counted as one free
         parameter.
+    enforce_water_balance : bool, optional
+        Whether to scale ET by a per-water-year multiplier so that
+        P - Q - ET = 0 over each water year.  Default True.  Set to
+        False only when supplying trusted measured ET that should not
+        be corrected; see Buckets.initialize().  Overrides the
+        enforce_water_balance key in the YAML config.
 
     Returns
     -------
@@ -350,7 +357,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         raise ValueError(f"metric must be one of {list(_METRICS)}; got {metric!r}")
 
     b = Buckets()
-    b.initialize(cfg)
+    b.initialize(cfg, enforce_water_balance=enforce_water_balance)
 
     # --- Parameter overrides and free-parameter count ---
     k = 0

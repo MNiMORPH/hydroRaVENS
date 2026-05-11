@@ -404,7 +404,7 @@ class Buckets(object):
         """
         return [reservoir.Hwater for reservoir in self.reservoirs]
 
-    def initialize(self, config_file=None, scale_et=None):
+    def initialize(self, config_file=None, enforce_water_balance=None):
         """
         Set up the model from a YAML configuration file.
 
@@ -419,10 +419,10 @@ class Buckets(object):
             Path to the YAML configuration file. If None, all required
             values must be set on the object directly before calling
             update().
-        scale_et : bool or None, optional
+        enforce_water_balance : bool or None, optional
             Whether to scale ET by a per-water-year multiplier so that
             P - Q - ET = 0 over each water year. When None (default), the
-            value is read from ``general: scale_et`` in the YAML config,
+            value is read from ``general: enforce_water_balance`` in the YAML config,
             which itself defaults to True if absent. Set to False to use
             raw ET without water-balance correction — appropriate when
             supplying trusted measured ET (e.g. eddy covariance). Using
@@ -513,11 +513,11 @@ class Buckets(object):
         # Maybe I should permit a more sophisticated spin-up at some point!
         self.n_spin_up_cycles = self.cfg['general']['spin_up_cycles']
 
-        # Resolve scale_et: keyword argument takes precedence over YAML,
+        # Resolve enforce_water_balance: keyword argument takes precedence over YAML,
         # which defaults to True if the key is absent.
-        if scale_et is None:
-            scale_et = self.cfg['general'].get('scale_et', True)
-        self.scale_et = scale_et
+        if enforce_water_balance is None:
+            enforce_water_balance = self.cfg['general'].get('enforce_water_balance', True)
+        self.enforce_water_balance = enforce_water_balance
 
         # Initial conditions if resuming from prior run
         if self.has_snowpack:
@@ -565,15 +565,15 @@ class Buckets(object):
         self.compute_water_year()
 
         # Compute ET, optionally scaling to close the annual water balance.
-        if self.scale_et:
+        if self.enforce_water_balance:
             self.compute_ET_multiplier()
         elif self.et_method == 'ThorntwaiteChang2019':
             warnings.warn(
-                "scale_et=False with ThorntwaiteChang2019: Thornthwaite ET "
+                "enforce_water_balance=False with ThorntwaiteChang2019: Thornthwaite ET "
                 "will not be rescaled to close the water balance. "
                 "Thornthwaite ET carries large systematic biases; omitting "
                 "the correction is likely to produce significant mass-balance "
-                "errors. Consider scale_et=True or supplying measured ET via "
+                "errors. Consider enforce_water_balance=True or supplying measured ET via "
                 "evapotranspiration_method: datafile."
             )
         self.compute_ET()
@@ -638,10 +638,10 @@ class Buckets(object):
         Build the ET time series used in the model.
 
         Obtains raw daily ET from the input data file or the Thornthwaite–Chang
-        2019 equation (see evapotranspiration_Chang2019()). When scale_et is
+        2019 equation (see evapotranspiration_Chang2019()). When enforce_water_balance is
         True (the default), raw ET is multiplied by the per-water-year
         multiplier from compute_ET_multiplier() so that P - Q - ET = 0 over
-        each water year. When scale_et is False, raw ET is used directly.
+        each water year. When enforce_water_balance is False, raw ET is used directly.
 
         The result is stored as 'ET for model [mm/day]' in self.hydrodata.
         """
@@ -653,7 +653,7 @@ class Buckets(object):
             raise ValueError('evapotranspiration_method must be "datafile" or '+
                              '"ThorntwaiteChang2019".')
 
-        if self.scale_et:
+        if self.enforce_water_balance:
             # Merge per-water-year multiplier into hydrodata, then apply.
             # Use .to_numpy() to multiply by position rather than pandas index
             # so that any index reset from the merge cannot silently misalign rows.
