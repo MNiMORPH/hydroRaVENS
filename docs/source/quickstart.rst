@@ -61,10 +61,10 @@ HydroRaVENS is configured through a YAML file (``config.yml``):
         datafile: input_data.csv
 
     initial_conditions:
-        water_reservoir_effective_depths__m:
+        water_reservoir_effective_depths__mm:
             - 2      # Top (soil) reservoir
             - 400    # Bottom (groundwater) reservoir
-        snowpack__m_SWE: 0
+        snowpack__mm_SWE: 0
 
     catchment:
         drainage_basin_area__km2: 3800
@@ -82,7 +82,7 @@ HydroRaVENS is configured through a YAML file (``config.yml``):
         exfiltration_fractions:
             - 0.8     # 80% to discharge, 20% infiltrates
             - 1.0     # 100% to discharge (bottom layer)
-        maximum_effective_depths__m:
+        maximum_effective_depths__mm:
             - .inf
             - .inf
 
@@ -128,7 +128,7 @@ Model performance depends on the reservoir parameters:
   * Lower = more infiltration to deeper layers
   * Bottom layer should be 1.0 (all to discharge)
 
-**Initial depths** (``water_reservoir_effective_depths__m``)
+**Initial depths** (``water_reservoir_effective_depths__mm``)
   Starting water content in each reservoir. Spin-up cycles reduce
   sensitivity to these initial values.
 

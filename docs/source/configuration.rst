@@ -59,22 +59,22 @@ The ``initial_conditions`` section
    * - Option
      - Type
      - Description
-   * - ``water_reservoir_effective_depths__m``
+   * - ``water_reservoir_effective_depths__mm``
      - list of floats
-     - Initial water depth (m) in each reservoir, listed top to bottom
-   * - ``snowpack__m_SWE``
+     - Initial water depth (mm) in each reservoir, listed top to bottom
+   * - ``snowpack__mm_SWE``
      - float
-     - Initial snowpack depth in m snow-water equivalent (SWE)
+     - Initial snowpack depth in mm snow-water equivalent (SWE)
 
 Example:
 
 .. code-block:: yaml
 
     initial_conditions:
-        water_reservoir_effective_depths__m:
-            - 1.5    # Top (soil) reservoir starts at 1.5 m
-            - 200    # Bottom (groundwater) starts at 200 m
-        snowpack__m_SWE: 0.5  # 0.5 m SWE initially
+        water_reservoir_effective_depths__mm:
+            - 150    # Top (soil) reservoir starts at 150 mm
+            - 400    # Bottom (groundwater) starts at 400 mm
+        snowpack__mm_SWE: 50  # 50 mm SWE initially
 
 The ``catchment`` section
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -151,9 +151,9 @@ All lists must have the same length.
    * - ``exfiltration_fractions``
      - list of floats
      - Fraction (0–1) of drainage exiting as discharge
-   * - ``maximum_effective_depths__m``
+   * - ``maximum_effective_depths__mm``
      - list of floats
-     - Storage capacity (m) per reservoir; use ``.inf`` for unlimited
+     - Storage capacity (mm) per reservoir; use ``.inf`` for unlimited
 
 Example:
 
@@ -166,7 +166,7 @@ Example:
         exfiltration_fractions:
             - 0.8     # 80% to river, 20% to next layer
             - 1.0     # 100% to river (should be 1.0; warning issued if not)
-        maximum_effective_depths__m:
+        maximum_effective_depths__mm:
             - .inf
             - .inf
 
@@ -204,22 +204,22 @@ Complete Example
         datafile: data/input.csv
     
     initial_conditions:
-        water_reservoir_effective_depths__m: [2, 400]
-        snowpack__m_SWE: 0
-    
+        water_reservoir_effective_depths__mm: [2, 400]
+        snowpack__mm_SWE: 0
+
     catchment:
         drainage_basin_area__km2: 3800
         evapotranspiration_method: ThorntwaiteChang2019  # requires T_monthly_normals in Python
         water_year_start_month: 10
-    
+
     general:
         scalar_dt: true
         spin_up_cycles: 1
-    
+
     reservoirs:
         e_folding_residence_times__days: [16, 2000]
         exfiltration_fractions: [0.8, 1.0]
-        maximum_effective_depths__m: [.inf, .inf]
+        maximum_effective_depths__mm: [.inf, .inf]
     
     snowmelt:
         PDD_melt_factor: 1.0
