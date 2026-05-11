@@ -180,7 +180,6 @@ class Snowpack(object):
         self.melt_factor = melt_factor
         self.T = 0.
         self.H_infiltrated = 0.
-        self.H_discharge = 0.
         self.H_deficit = 0.
 
     def set_melt_factor(self, melt_factor):
@@ -280,7 +279,6 @@ class Snowpack(object):
             Zero when SWE is not fully depleted.
         """
         if self.T <= 0:
-            self.H_discharge = 0.
             return 0.0
 
         pdd_avail   = self.melt_factor * self.T * dt    # [mm SWE]
@@ -296,15 +294,8 @@ class Snowpack(object):
             excess_dd = (total_avail - actual_melt) / self.melt_factor
 
         self.H_infiltrated += actual_melt
-        self.H_discharge    = 0.
         self.Hwater        -= actual_melt
         return excess_dd
-
-    def discharge(self, dt):
-        """
-        Backward-compatible PDD-only melt. Calls melt(dt, P=0); see melt().
-        """
-        self.melt(dt, P=0.0)
 
 
 class Buckets(object):
