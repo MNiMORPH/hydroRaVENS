@@ -75,7 +75,7 @@ Each reservoir first receives its recharge input, then drains by exponential dec
 
 where:
 
-* :math:`H_i` = water depth in reservoir :math:`i` at the start of the time step (m)
+* :math:`H_i` = water depth in reservoir :math:`i` at the start of the time step (mm)
 * :math:`Q_{\text{recharge},i}` = water input to reservoir :math:`i` this time step (mm)
 * :math:`\tau_i` = e-folding residence time (days)
 * :math:`\Delta t` = time step (1 day)
