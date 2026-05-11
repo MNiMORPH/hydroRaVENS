@@ -708,6 +708,8 @@ class Buckets(object):
         ----------
         Molnau & Bissell (1983) https://westernsnowconference.org/sites/
             westernsnowconference.org/PDFs/1983Molnau.pdf
+            (Western Snow Conference proceedings — cited as the original
+            source for this specific FGI formulation)
         Shanley & Chalmers (1999) doi:10.1002/(SICI)1099-1085(199909)13:12/13
             <1843::AID-HYP879>3.0.CO;2-G
         Dunne & Black (1971) doi:10.1029/WR007i005p01160
