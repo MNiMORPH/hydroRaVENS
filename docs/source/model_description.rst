@@ -167,6 +167,13 @@ where:
   separately at the reservoir level — it is already incorporated into the
   recharge input to the top reservoir.
 
+**Physical interpretation:**
+  No reservoir is fixed to a particular process; meaning is set by
+  parameter choice. Successive reservoirs naturally span progressively
+  longer timescales — interflow (days), soil moisture (months),
+  groundwater (years) — but that mapping is the user's choice, analogous
+  to the multi-component runoff structure of HBV (Bergström 1976).
+
 Evapotranspiration
 ~~~~~~~~~~~~~~~~~~
 

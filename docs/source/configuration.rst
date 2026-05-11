@@ -164,14 +164,22 @@ Example:
 
     reservoirs:
         e_folding_residence_times__days:
-            - 16      # Soil: drains in ~16 days
-            - 2000    # Groundwater: drains in ~2000 days
+            - 16      # Interflow: fast lateral drainage, days to weeks
+            - 200     # Soil zone: seasonal storage, months
+            - 3650    # Groundwater: multi-year storage
         exfiltration_fractions:
-            - 0.8     # 80% to river, 20% to next layer
-            - 1.0     # 100% to river (should be 1.0; warning issued if not)
+            - 0.8     # 80% to stream, 20% percolates to soil zone
+            - 0.1     # 10% to stream, 90% recharges groundwater
+            - 1.0     # All exits as baseflow
         maximum_effective_depths__mm:
             - .inf
             - .inf
+            - .inf
+
+No reservoir is fixed to a particular process; physical meaning is set
+by the parameters. Successive reservoirs naturally span progressively
+longer storage timescales — from interflow (days) to soil moisture
+(months) to groundwater (years) — but that mapping is the user's choice.
 
 The ``snowmelt`` section
 ~~~~~~~~~~~~~~~~~~~~~~~~

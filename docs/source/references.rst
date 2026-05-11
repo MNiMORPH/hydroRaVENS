@@ -71,6 +71,14 @@ evaporation equation to daily totals.
 *Agricultural and Forest Meteorology*, 124(1-2), 26--32.
 https://doi.org/10.1016/j.agrformet.2004.01.005
 
+Reservoir Cascade Structure
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Bergström, S. (1976). *Development and Application of a Conceptual Runoff
+Model for Scandinavian Catchments.* SMHI Report RHO 7. Swedish
+Meteorological and Hydrological Institute, Norrköping.
+(Original HBV model; multi-component runoff cascade structure.)
+
 Channel Routing
 ~~~~~~~~~~~~~~~
 
