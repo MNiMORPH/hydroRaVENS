@@ -549,10 +549,16 @@ class Buckets(object):
         water_year_start_month and is labelled by the calendar year in
         which it ends. For example, with a start month of October (USGS
         convention), 1 Oct 2020 – 30 Sep 2021 is water year 2021.
+
+        When water_year_start_month is 1 (January), the water year equals
+        the calendar year and no offset is applied.
         """
         self.hydrodata['Water Year'] = pd.DatetimeIndex(self.hydrodata['Date']).year
-        self.hydrodata['Water Year'] += \
-            pd.DatetimeIndex(self.hydrodata['Date']).month >= self.water_year_start_month
+        if self.water_year_start_month > 1:
+            self.hydrodata['Water Year'] += (
+                pd.DatetimeIndex(self.hydrodata['Date']).month
+                >= self.water_year_start_month
+            )
 
     def compute_ET_multiplier(self):
         """
