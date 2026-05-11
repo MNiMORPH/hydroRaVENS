@@ -74,7 +74,7 @@ CalibResult = namedtuple('CalibResult', [
     'bfi_mod',      # float: modelled baseflow index
     'fdc_obs',      # pd.Series: observed flow at exceedance probabilities
     'fdc_mod',      # pd.Series: modelled flow at exceedance probabilities
-    'final_states', # dict: {'reservoirs': [...], 'snowpack': float}
+    'final_states', # dict: {'reservoirs': [...], 'snowpack': float, 'fgi': float}
     'buckets',      # Buckets object after the final run
 ])
 
