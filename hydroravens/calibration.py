@@ -273,7 +273,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         Exfiltration fractions to stream, one per reservoir except the
         deepest (which is always 1.0). Overrides the values in cfg.
     Hmax : list of float, optional
-        Maximum effective water depths [m], one per reservoir. Overrides
+        Maximum effective water depths [mm], one per reservoir. Overrides
         the values in cfg.
     melt_factor : float, optional
         Degree-day snowmelt factor [mm SWE per degC per day]. Overrides
