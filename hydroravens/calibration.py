@@ -78,6 +78,43 @@ CalibResult = namedtuple('CalibResult', [
     'final_states', # dict: {'reservoirs': [...], 'snowpack': float, 'fgi': float}
     'buckets',      # Buckets object after the final run
 ])
+CalibResult.__doc__ = """
+Named tuple returned by :func:`run_and_score`.
+
+Attributes
+----------
+score : float
+    Goodness-of-fit score (higher is better). Metric is one of KGE,
+    NSE, or logKGE as requested; see :func:`run_and_score`.
+aic : float
+    Akaike Information Criterion computed on log-transformed flows
+    (lower is better). Useful for comparing models with different
+    numbers of free parameters.
+bfi_obs : float
+    Baseflow index of the observed discharge, computed with the
+    Eckhardt (2005) recursive digital filter.
+bfi_mod : float
+    Baseflow index of the modelled discharge.
+fdc_obs : pd.Series
+    Observed flow duration curve: discharge at 99 evenly-spaced
+    exceedance probabilities (0.5–99.5 %), indexed by exceedance %.
+fdc_mod : pd.Series
+    Modelled flow duration curve (same format as fdc_obs).
+final_states : dict
+    End-of-run reservoir states suitable for passing as
+    ``initial_states`` to the next call::
+
+        {'reservoirs': [H_shallow, H_deep, ...],
+         'snowpack':    H_snow_SWE,
+         'fgi':         frozen_ground_index}
+
+buckets : Buckets
+    The :class:`~hydroravens.Buckets` object after the final run,
+    including the full ``hydrodata`` DataFrame with modelled discharge.
+
+All scalar fields are ``np.nan`` if the scoring window contains no
+valid overlapping data.
+"""
 
 
 # ---------------------------------------------------------------------------

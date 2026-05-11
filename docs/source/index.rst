@@ -42,6 +42,7 @@ and educational applications.
    :caption: Reference
 
    api
+   calibration
    references
 
 Quick Example
@@ -56,7 +57,7 @@ Quick Example
     model = hydroravens.Buckets()
     model.initialize('config.yml')
     model.run()
-    nse = model.computeNSE(verbose=True)
+    nse = model.compute_NSE(verbose=True)
     model.plot()
 
 **Command-line:**
