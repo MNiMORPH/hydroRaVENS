@@ -355,7 +355,6 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     # --- Spin up on the full record with calibrated parameters ---
     for _ in range(spin_up_cycles):
         b.run()
-        b._timestep_i = b.hydrodata.index[0]
 
     # --- Final scored run ---
     b.run()
