@@ -404,14 +404,14 @@ class Buckets(object):
         """
         return [reservoir.Hwater for reservoir in self.reservoirs]
 
-    def initialize(self, config_file=None):
+    def initialize(self, config_file=None, scale_et=None):
         """
         Set up the model from a YAML configuration file.
 
         Reads the configuration file, loads the input time series, builds
         the reservoir stack, instantiates snowpack if temperature data are
-        present, computes the water-year ET multiplier, and runs any
-        requested spin-up cycles. Part of the CSDMS Basic Model Interface.
+        present, optionally computes the water-year ET multiplier, and runs
+        any requested spin-up cycles. Part of the CSDMS Basic Model Interface.
 
         Parameters
         ----------
@@ -419,6 +419,15 @@ class Buckets(object):
             Path to the YAML configuration file. If None, all required
             values must be set on the object directly before calling
             update().
+        scale_et : bool or None, optional
+            Whether to scale ET by a per-water-year multiplier so that
+            P - Q - ET = 0 over each water year. When None (default), the
+            value is read from ``general: scale_et`` in the YAML config,
+            which itself defaults to True if absent. Set to False to use
+            raw ET without water-balance correction — appropriate when
+            supplying trusted measured ET (e.g. eddy covariance). Using
+            False with ThorntwaiteChang2019 will raise a warning because
+            Thornthwaite ET is known to carry large systematic biases.
         """
         if config_file is None:
             warnings.warn("No configuration file provided; all values needed "+
@@ -504,6 +513,12 @@ class Buckets(object):
         # Maybe I should permit a more sophisticated spin-up at some point!
         self.n_spin_up_cycles = self.cfg['general']['spin_up_cycles']
 
+        # Resolve scale_et: keyword argument takes precedence over YAML,
+        # which defaults to True if the key is absent.
+        if scale_et is None:
+            scale_et = self.cfg['general'].get('scale_et', True)
+        self.scale_et = scale_et
+
         # Initial conditions if resuming from prior run
         if self.has_snowpack:
             self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__mm_SWE']
@@ -549,11 +564,18 @@ class Buckets(object):
         # water-year rollover
         self.compute_water_year()
 
-        # Scale evapotranspiration to enable water balance
-        # We use this because ET estimates usually have much more
-        # error than discharge, but may in the future want a way to
-        # disable it.
-        self.compute_ET_multiplier()
+        # Compute ET, optionally scaling to close the annual water balance.
+        if self.scale_et:
+            self.compute_ET_multiplier()
+        elif self.et_method == 'ThorntwaiteChang2019':
+            warnings.warn(
+                "scale_et=False with ThorntwaiteChang2019: Thornthwaite ET "
+                "will not be rescaled to close the water balance. "
+                "Thornthwaite ET carries large systematic biases; omitting "
+                "the correction is likely to produce significant mass-balance "
+                "errors. Consider scale_et=True or supplying measured ET via "
+                "evapotranspiration_method: datafile."
+            )
         self.compute_ET()
 
         # Model spin-up, if requested
@@ -586,7 +608,7 @@ class Buckets(object):
         For each water year, computes the ratio of required ET (P - Q) to
         measured or computed ET, and stores this as 'ET multiplier' in
         self.hydrodata_WY_means. This multiplier is later applied in
-        compute_ET() to scale ET so that P - Q - ET ≈ 0 over each water year.
+        compute_ET() to scale ET so that P - Q - ET = 0 over each water year.
         """
         # Originally used "sum", but then used "mean" so the headers would
         # still be sensible
@@ -613,14 +635,13 @@ class Buckets(object):
 
     def compute_ET(self):
         """
-        Build the water-balance-adjusted ET time series used in the model.
+        Build the ET time series used in the model.
 
-        Assembles ET in two steps:
-
-        1. Obtain raw daily ET from the input data file or the
-           Thornthwaite–Chang 2019 equation (see evapotranspiration_Chang2019()).
-        2. Scale raw ET by the per-water-year multiplier from
-           compute_ET_multiplier() so that P - Q - ET ≈ 0 in each water year.
+        Obtains raw daily ET from the input data file or the Thornthwaite–Chang
+        2019 equation (see evapotranspiration_Chang2019()). When scale_et is
+        True (the default), raw ET is multiplied by the per-water-year
+        multiplier from compute_ET_multiplier() so that P - Q - ET = 0 over
+        each water year. When scale_et is False, raw ET is used directly.
 
         The result is stored as 'ET for model [mm/day]' in self.hydrodata.
         """
@@ -631,16 +652,18 @@ class Buckets(object):
         else:
             raise ValueError('evapotranspiration_method must be "datafile" or '+
                              '"ThorntwaiteChang2019".')
-        # There should be a better way to do this fully in an operation
-        # rather than adding it to the dataframe + memory
-        # But this is pretty straightforward and doesn't use much memory
-        self.hydrodata = self.hydrodata.merge(
-            self.hydrodata_WY_means['ET multiplier'],
-            on='Water Year')
-        # Use .to_numpy() to multiply by position rather than pandas index, so
-        # that any index reset from the merge cannot silently misalign rows.
-        self.hydrodata['ET for model [mm/day]'] = (
-            _raw_ET.to_numpy() * self.hydrodata['ET multiplier'].to_numpy())
+
+        if self.scale_et:
+            # Merge per-water-year multiplier into hydrodata, then apply.
+            # Use .to_numpy() to multiply by position rather than pandas index
+            # so that any index reset from the merge cannot silently misalign rows.
+            self.hydrodata = self.hydrodata.merge(
+                self.hydrodata_WY_means['ET multiplier'],
+                on='Water Year')
+            self.hydrodata['ET for model [mm/day]'] = (
+                _raw_ET.to_numpy() * self.hydrodata['ET multiplier'].to_numpy())
+        else:
+            self.hydrodata['ET for model [mm/day]'] = np.asarray(_raw_ET)
 
     def _compute_snowpack(self, time_step):
         """

@@ -119,6 +119,13 @@ The ``general`` section
      - int
      - Number of complete passes through data before the main run. Use 0 to
        skip spin-up.
+   * - ``scale_et``
+     - bool
+     - Scale ET by a per-water-year multiplier so that P − Q − ET = 0 over
+       each water year. Default ``true``. Set to ``false`` only when
+       supplying trusted measured ET (e.g. eddy covariance) that should not
+       be corrected. Using ``false`` with ``ThorntwaiteChang2019`` will raise
+       a warning because Thornthwaite ET carries large systematic biases.
 
 Example:
 
@@ -126,6 +133,7 @@ Example:
 
     general:
         spin_up_cycles: 2  # Run through data twice to initialize
+        scale_et: true     # default; omit to accept the default
 
 The ``reservoirs`` section
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

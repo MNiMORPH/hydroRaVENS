@@ -189,7 +189,7 @@ Two methods are supported:
   Then scaled by water year to match observed P − Q balance.
 
 In both cases, the annual scaling factor is stored and applied to ensure that 
-:math:`P - Q - E \approx 0` on each water year.
+:math:`P - Q - E = 0` over each water year.
 
 Model Skill Evaluation
 ~~~~~~~~~~~~~~~~~~~~~~
