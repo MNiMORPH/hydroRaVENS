@@ -6,9 +6,10 @@ named tuple containing the goodness-of-fit score, AIC, baseflow index,
 flow duration curve, end-of-run reservoir states, and the Buckets object.
 
 Intended use: call run_and_score() from a Dakota driver or any other
-optimizer. The YAML config passed to cfg must have spin_up_cycles: 0;
-spin-up is managed here so calibrated parameters are in effect before
-any simulation runs.
+optimizer. Set spin_up_cycles: 0 in the YAML config; run_and_score()
+manages spin-up itself using the calibrated parameters. If the YAML
+requests spin-up cycles, initialize() will run them before the parameter
+overrides are applied, so those cycles use uncalibrated values.
 
 Supported metrics
 -----------------
