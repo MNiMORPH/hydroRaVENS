@@ -316,7 +316,9 @@ def _steady_state_depths(reservoirs, mean_q):
 # ---------------------------------------------------------------------------
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
-                  melt_factor=None, fdd_threshold=None, initial_states=None,
+                  melt_factor=None, fdd_threshold=None,
+                  direct_runoff_fraction=None,
+                  initial_states=None,
                   start=None, end=None, spin_up_cycles=3,
                   metric='KGE', routing_N=2, routing_K=None,
                   enforce_water_balance=True):
@@ -340,6 +342,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     melt_factor : float, optional
         Degree-day snowmelt factor [mm SWE per degC per day]. Overrides
         the value in cfg.
+    direct_runoff_fraction : float or None, optional
+        Fraction (0–1) of positive daily recharge that bypasses the
+        reservoir cascade and exits directly as runoff.  Represents
+        infiltration-excess overland flow and other fast-bypass pathways
+        that are independent of antecedent storage.  None (default) leaves
+        the value from the YAML config (itself defaulting to 0).
     fdd_threshold : float or None, optional
         Frozen ground index threshold [°C·day].  The frozen ground index
         accumulates freezing degree-days and decays during warming
@@ -451,6 +459,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     if fdd_threshold is not None:
         b.fdd_threshold = fdd_threshold
+        k += 1
+
+    if direct_runoff_fraction is not None:
+        b.direct_runoff_fraction = direct_runoff_fraction
         k += 1
 
     if routing_K is not None:

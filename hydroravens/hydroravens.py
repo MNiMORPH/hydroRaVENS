@@ -519,6 +519,13 @@ class Buckets(object):
             enforce_water_balance = self.cfg['general'].get('enforce_water_balance', True)
         self.enforce_water_balance = enforce_water_balance
 
+        # Fraction of positive daily recharge that bypasses the reservoir
+        # cascade and exits directly as runoff.  Represents infiltration-excess
+        # (Hortonian) overland flow and other fast-bypass pathways.
+        # Default 0 (all water enters the top reservoir).
+        self.direct_runoff_fraction = self.cfg['general'].get(
+            'direct_runoff_fraction', 0.0)
+
         # Initial conditions if resuming from prior run
         if self.has_snowpack:
             self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__mm_SWE']
@@ -786,14 +793,17 @@ class Buckets(object):
         for i in range(len(self.reservoirs)):
             if i == 0:
                 if self.has_snowpack:
-                    self.reservoirs[i].recharge(self.snowpack.H_infiltrated
-                                                + self.H_deficit_carry)
+                    _recharge = (self.snowpack.H_infiltrated
+                                 + self.H_deficit_carry)
                 else:
-                    self.reservoirs[i].recharge(
+                    _recharge = (
                         self.hydrodata['Precipitation [mm/day]'][time_step] -
                         self.hydrodata['ET for model [mm/day]'][time_step] +
-                        self.H_deficit_carry
-                    )
+                        self.H_deficit_carry)
+                # Direct runoff: bypass the reservoir cascade entirely.
+                _q_direct = max(0.0, _recharge) * self.direct_runoff_fraction
+                qi += _q_direct
+                self.reservoirs[i].recharge(_recharge - _q_direct)
             else:
                 # Let water infiltrate to lower layers effectively
                 # instantaneously; this isn't quite realistic, but
