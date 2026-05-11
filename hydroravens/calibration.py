@@ -150,6 +150,20 @@ def _kge_logkge(m, o):
     return 0.5 * _kge(m, o) + 0.5 * _log_kge(m, o)
 
 
+def _kge_logfdc(m, o):
+    """KGE between log-transformed FDC ordinates (rank-sorted flows)."""
+    eps  = 0.01 * o.mean()
+    m_fdc = np.sort(m)[::-1]
+    o_fdc = np.sort(o)[::-1]
+    return _kge(np.log(m_fdc + eps), np.log(o_fdc + eps))
+
+
+def _kge_logkge_logfdc(m, o):
+    return (  _kge(m, o)
+            + _log_kge(m, o)
+            + _kge_logfdc(m, o)) / 3.0
+
+
 def _aic(m, o, k):
     eps        = 0.01 * o.mean()
     ss_res_log = np.sum((np.log(m + eps) - np.log(o + eps)) ** 2)
@@ -260,7 +274,8 @@ def _nash_cascade(q, N, K, dt=1.0):
 
 
 _METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge,
-            'KGE_logKGE': _kge_logkge}
+            'KGE_logKGE': _kge_logkge,
+            'KGE_logKGE_logFDC': _kge_logkge_logfdc}
 
 
 def _steady_state_depths(reservoirs, mean_q):
@@ -483,8 +498,9 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         q_obs  = b.hydrodata['Specific Discharge [mm/day]'].dropna()
         mean_q = float(q_obs.mean())
         if np.isfinite(mean_q) and mean_q > 0:
+            mean_q_eff = mean_q * (1.0 - b.direct_runoff_fraction)
             for res, h in zip(b.reservoirs,
-                              _steady_state_depths(b.reservoirs, mean_q)):
+                              _steady_state_depths(b.reservoirs, mean_q_eff)):
                 res.Hwater = h
 
     # --- Spin up on the full record with calibrated parameters ---
