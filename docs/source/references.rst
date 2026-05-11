@@ -103,6 +103,14 @@ filters: A discussion of two alternative filtering approaches.
 *Hydrological Processes*, 19(2), 507--515.
 https://doi.org/10.1002/hyp.5675
 
+Yilmaz, K. K., Gupta, H. V., & Wagener, T. (2008). A process-based
+diagnostic approach to model evaluation: Application to the NWS
+distributed hydrological model.
+*Water Resources Research*, 44(9), W09417.
+https://doi.org/10.1029/2007WR006716
+(Basis for the ``KGE_logKGE`` composite metric: no single efficiency
+measure captures both high- and low-flow behaviour.)
+
 Gupta, H. V., Kling, H., Yilmaz, K. K., & Martinez, G. F. (2009).
 Decomposition of the mean squared error and NSE: Implications for improving
 hydrological modelling.

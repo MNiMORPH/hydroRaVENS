@@ -27,6 +27,15 @@ Supported metrics
          peaks.  A small epsilon (1 % of mean observed flow) is added
          before taking logs to avoid log(0).
 
+'KGE_logKGE'
+         Equal-weight average of KGE and logKGE: 0.5*KGE + 0.5*logKGE.
+         Balances sensitivity to peaks (KGE) and low flows (logKGE).
+         Recommended when neither regime should dominate calibration.
+         Following Yilmaz et al. (2008, WRR), who show that no single
+         metric captures both high- and low-flow behaviour; this composite
+         is the single-objective analogue of their multi-segment FDC
+         approach.
+
 AIC
 ---
 AIC = N * ln(SS_res_log / N) + 2k, where SS_res_log is the sum of squared
@@ -135,6 +144,10 @@ def _kge(m, o):
 def _log_kge(m, o):
     eps = 0.01 * o.mean()
     return _kge(np.log(m + eps), np.log(o + eps))
+
+
+def _kge_logkge(m, o):
+    return 0.5 * _kge(m, o) + 0.5 * _log_kge(m, o)
 
 
 def _aic(m, o, k):
@@ -246,7 +259,56 @@ def _nash_cascade(q, N, K, dt=1.0):
     return out
 
 
-_METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge}
+_METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge,
+            'KGE_logKGE': _kge_logkge}
+
+
+def _steady_state_depths(reservoirs, mean_q):
+    """
+    Analytical steady-state water depth for each reservoir in a cascade.
+
+    For a linear reservoir with constant mean inflow Q̄_in and dt = 1 day:
+
+        H_eq = Q̄_in / (exp(1/τ) − 1)
+
+    derived from the exact update H_{t+1} = (H_t + Q̄_in) · exp(−1/τ) and
+    the steady-state condition H_{t+1} = H_t.
+
+    Mean recharge to the top reservoir equals the long-run mean streamflow
+    (mass conservation at steady state).  Recharge to each deeper reservoir
+    is the fraction (1 − f_i) of the drainage from the reservoir above.
+
+    Parameters
+    ----------
+    reservoirs : list of Reservoir
+        Ordered shallowest to deepest; each has .t_efold, .f_to_discharge,
+        and .Hmax attributes.
+    mean_q : float
+        Long-run mean specific discharge [mm/day], used as the steady-state
+        mean recharge to the top reservoir.
+
+    Returns
+    -------
+    list of float
+        Steady-state water depth [mm] for each reservoir, capped at Hmax.
+
+    Notes
+    -----
+    Using these depths as initial conditions serves two purposes: (1) it
+    gives physically correct starting storage without relying on spin-up to
+    fill reservoirs whose timescale exceeds the record length, and (2) it
+    allows spin-up cycles to converge faster because short-timescale
+    reservoirs start near equilibrium too -- only transient variability
+    (seasonal cycles, wet/dry year sequences) needs to be resolved by
+    spin-up rather than the slow drift from an arbitrary starting depth.
+    """
+    depths = []
+    q_in = float(mean_q)
+    for res in reservoirs:
+        H_eq = q_in / (np.exp(1.0 / res.t_efold) - 1.0)
+        depths.append(min(H_eq, res.Hmax))
+        q_in *= (1.0 - res.f_to_discharge)
+    return depths
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +360,9 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         When provided, these override the H0 values from cfg.  Use with
         spin_up_cycles=0 when chaining consecutive decades so that water
         storage and frozen-ground state are physically continuous.
+        When None (default), reservoirs are initialised to their
+        analytical steady-state depths before spin-up (see
+        :func:`_steady_state_depths`).
     start : str or datetime-like, optional
         Start of the scoring window (inclusive). Score, AIC, BFI, and FDC
         are all computed within this window. Spin-up still uses the full
@@ -308,8 +373,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         Number of times to loop the full record before the scored run.
         Default is 3.  Set to 0 when providing initial_states for chained
         decade runs.
-    metric : {'KGE', 'NSE', 'logKGE'}, optional
+    metric : {'KGE', 'NSE', 'logKGE', 'KGE_logKGE'}, optional
         Goodness-of-fit metric.  Default is 'KGE'.
+        ``'KGE_logKGE'`` returns 0.5*KGE + 0.5*logKGE, balancing
+        peak and low-flow performance (Yilmaz et al. 2008).
     routing_N : int, optional
         Number of identical linear reservoirs in the Nash cascade used
         for channel routing (shape parameter of the gamma IUH).
@@ -389,13 +456,24 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if routing_K is not None:
         k += 1
 
-    # --- Optional: override initial storage states (for chained decades) ---
+    # --- Set initial storage states ---
     if initial_states is not None:
+        # Chained decade: restore end-of-previous-decade states exactly.
         for i, h in enumerate(initial_states['reservoirs']):
             b.reservoirs[i].Hwater = h
         if b.has_snowpack:
             b.snowpack.Hwater = initial_states.get('snowpack', 0.0)
         b._fgi = initial_states.get('fgi', 0.0)
+    else:
+        # Analytical steady-state initialization: correct for reservoirs
+        # whose timescale exceeds the record length and accelerates spin-up
+        # for all others.
+        q_obs  = b.hydrodata['Specific Discharge [mm/day]'].dropna()
+        mean_q = float(q_obs.mean())
+        if np.isfinite(mean_q) and mean_q > 0:
+            for res, h in zip(b.reservoirs,
+                              _steady_state_depths(b.reservoirs, mean_q)):
+                res.Hwater = h
 
     # --- Spin up on the full record with calibrated parameters ---
     for _ in range(spin_up_cycles):
