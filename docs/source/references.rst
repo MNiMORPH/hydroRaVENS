@@ -47,6 +47,19 @@ https://doi.org/10.1002/(SICI)1099-1085(199909)13:12/13<1843::AID-HYP879>3.0.CO;
 Evapotranspiration
 ~~~~~~~~~~~~~~~~~~
 
+Allen, R. G., Pereira, L. S., Raes, D., & Smith, M. (1998).
+*Crop Evapotranspiration: Guidelines for Computing Crop Water Requirements.*
+FAO Irrigation and Drainage Paper 56. FAO, Rome.
+https://www.fao.org/3/x0490e/x0490e00.htm
+(Equations 2--4 used for photoperiod computation in the Thornthwaite--Chang method.)
+
+Camargo, A. P., Marin, F. R., Sentelhas, P. C., & Picini, A. G. (1999).
+Adjust of the Thornthwaite's method to estimate the potential
+evapotranspiration for arid and superhumid climates based on daily temperature
+amplitude.
+*Revista Brasileira de Agrometeorologia*, 7(2), 251--257.
+(Source for the k = 0.72 coefficient for monthly ET₀.)
+
 Chang, X., Wang, S., Gao, Z., Luo, Y., & Chen, H. (2019). Forecast of daily
 reference evapotranspiration using a modified daily Thornthwaite equation and
 temperature forecasts.

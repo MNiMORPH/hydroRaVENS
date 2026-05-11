@@ -104,9 +104,9 @@ final_states : dict
     End-of-run reservoir states suitable for passing as
     ``initial_states`` to the next call::
 
-        {'reservoirs': [H_shallow, H_deep, ...],
-         'snowpack':    H_snow_SWE,
-         'fgi':         frozen_ground_index}
+        {'reservoirs': [H_shallow, H_deep, ...],  # [mm]
+         'snowpack':    H_snow_SWE,               # [mm SWE]
+         'fgi':         frozen_ground_index}       # [°C·day]
 
 buckets : Buckets
     The :class:`~hydroravens.Buckets` object after the final run,
