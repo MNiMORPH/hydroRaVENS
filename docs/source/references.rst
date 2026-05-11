@@ -1,58 +1,107 @@
 References
 ==========
 
-Key Publications
-~~~~~~~~~~~~~~~~
-
 Model Development
-^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~
 
-The HydroRaVENS model is described on the Community Surface Dynamics Modeling System (CSDMS) model page:
+The HydroRaVENS model is described on the Community Surface Dynamics Modeling
+System (CSDMS) model page:
 
 * `CSDMS Model Page: HydroRaVENS <https://csdms.colorado.edu/wiki/Model:HydroRaVENS>`_
 
-Evapotranspiration
-^^^^^^^^^^^^^^^^^^^
-
-Chang, X., Wang, S., Gao, Z., Luo, Y., & Chen, H. (2019). Forecast of daily reference
-evapotranspiration using a modified daily Thornthwaite equation and temperature forecasts.
-*Irrigation and Drainage*, 68(2), 297--317.
-https://doi.org/10.1002/ird.2309
-
-Pereira, A. R., & Pruitt, W. O. (2004). Adaptation of the Thom and Oliver evaporation
-equation to daily totals. *Agricultural and Forest Meteorology*, 124(1-2), 26--32.
-https://doi.org/10.1016/j.agrformet.2004.01.005
-
-Related Work
-~~~~~~~~~~~~
-
-Snowpack Modeling
-^^^^^^^^^^^^^^^^^^
+Snowpack and Rain-on-Snow
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Hock, R. (2003). Temperature index melt modelling in mountain areas.
 *Journal of Hydrology*, 282(1-4), 104--115.
 https://doi.org/10.1016/S0022-1694(03)00257-9
 
-Model Evaluation
-^^^^^^^^^^^^^^^^
+McCabe, G. J., Hay, L. E., & Clark, M. P. (2007). Rain-on-snow events in the
+western United States.
+*Bulletin of the American Meteorological Society*, 88(3), 319--328.
+https://doi.org/10.1175/BAMS-88-3-319
 
-Nash, J. E., & Sutcliffe, J. V. (1970). River flow forecasting through conceptual models
-part I -- A discussion of principles.
+Würzer, S., Jonas, T., Wever, N., & Lehning, M. (2016). Influence of initial
+snowpack properties on runoff formation during rain-on-snow events.
+*Journal of Hydrometeorology*, 17(6), 1801--1815.
+https://doi.org/10.1175/JHM-D-15-0181.1
+
+Frozen Ground
+~~~~~~~~~~~~~
+
+Dunne, T., & Black, R. D. (1971). Runoff processes during snowmelt.
+*Water Resources Research*, 7(5), 1160--1172.
+https://doi.org/10.1029/WR007i005p01160
+
+Molnau, M., & Bissell, V. C. (1983). A continuous frozen ground index for
+flood forecasting. *Proceedings of the 51st Annual Western Snow Conference*,
+pp. 109--119.
+https://westernsnowconference.org/sites/westernsnowconference.org/PDFs/1983Molnau.pdf
+(Original source for the continuous frozen ground index formulation.)
+
+Shanley, J. B., & Chalmers, A. (1999). The effect of frozen soil on snowmelt
+runoff at Sleepers River, Vermont.
+*Hydrological Processes*, 13(12--13), 1843--1857.
+https://doi.org/10.1002/(SICI)1099-1085(199909)13:12/13<1843::AID-HYP879>3.0.CO;2-G
+
+Evapotranspiration
+~~~~~~~~~~~~~~~~~~
+
+Chang, X., Wang, S., Gao, Z., Luo, Y., & Chen, H. (2019). Forecast of daily
+reference evapotranspiration using a modified daily Thornthwaite equation and
+temperature forecasts.
+*Irrigation and Drainage*, 68(2), 297--317.
+https://doi.org/10.1002/ird.2309
+
+Pereira, A. R., & Pruitt, W. O. (2004). Adaptation of the Thom and Oliver
+evaporation equation to daily totals.
+*Agricultural and Forest Meteorology*, 124(1-2), 26--32.
+https://doi.org/10.1016/j.agrformet.2004.01.005
+
+Channel Routing
+~~~~~~~~~~~~~~~
+
+Nash, J. E. (1957). The form of the instantaneous unit hydrograph.
+*IAHS Publication*, 45, 114--121.
+(Original source for the N-reservoir Nash cascade and its gamma IUH.)
+
+Dooge, J. C. I. (1959). A general theory of the unit hydrograph.
+*Journal of Geophysical Research*, 64(2), 241--256.
+https://doi.org/10.1029/JZ064i002p00241
+
+Rodriguez-Iturbe, I., & Valdés, J. B. (1979). The geomorphologic structure
+of hydrologic response.
+*Water Resources Research*, 15(6), 1409--1420.
+https://doi.org/10.1029/WR015i006p01409
+
+Model Calibration and Evaluation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Eckhardt, K. (2005). How to construct recursive digital baseflow separation
+filters: A discussion of two alternative filtering approaches.
+*Hydrological Processes*, 19(2), 507--515.
+https://doi.org/10.1002/hyp.5675
+
+Gupta, H. V., Kling, H., Yilmaz, K. K., & Martinez, G. F. (2009).
+Decomposition of the mean squared error and NSE: Implications for improving
+hydrological modelling.
+*Journal of Hydrology*, 377(1-2), 80--91.
+https://doi.org/10.1016/j.jhydrol.2009.08.003
+
+Nash, J. E., & Sutcliffe, J. V. (1970). River flow forecasting through
+conceptual models part I -- A discussion of principles.
 *Journal of Hydrology*, 10(3), 282--290.
 https://doi.org/10.1016/0022-1694(70)90255-6
 
 Software
 ~~~~~~~~
 
-NumPy:
+Harris, C. R., et al. (2020). Array programming with NumPy.
+*Nature*, 585, 357--362.
+https://doi.org/10.1038/s41586-020-2649-2
 
-  Harris, C. R., et al. (2020). Array programming with NumPy.
-  *Nature*, 585, 357--362. https://doi.org/10.1038/s41586-020-2649-2
-
-Pandas:
-
-  McKinney, W. (2010). Data structures for statistical computing in Python.
-  In *Proceedings of the 9th Python in Science Conference* (Vol. 445, pp. 56--61).
+McKinney, W. (2010). Data structures for statistical computing in Python.
+In *Proceedings of the 9th Python in Science Conference* (Vol. 445, pp. 56--61).
 
 External Resources
 ~~~~~~~~~~~~~~~~~~
