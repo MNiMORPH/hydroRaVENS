@@ -101,7 +101,7 @@ Run the Model
     model = hydroravens.Buckets()
     model.initialize('config.yml')
     model.run()
-    model.computeNSE(verbose=True)
+    model.compute_NSE(verbose=True)
     model.plot()
 
 **Using the command-line interface:**
