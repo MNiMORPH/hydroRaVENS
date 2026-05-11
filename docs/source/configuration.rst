@@ -115,10 +115,6 @@ The ``general`` section
    * - Option
      - Type
      - Description
-   * - ``scalar_dt``
-     - bool
-     - Required field; set to ``true``. The model always enforces a 1-day
-       time step regardless of this value.
    * - ``spin_up_cycles``
      - int
      - Number of complete passes through data before the main run. Use 0 to
@@ -129,7 +125,6 @@ Example:
 .. code-block:: yaml
 
     general:
-        scalar_dt: true
         spin_up_cycles: 2  # Run through data twice to initialize
 
 The ``reservoirs`` section
@@ -213,7 +208,6 @@ Complete Example
         water_year_start_month: 10
 
     general:
-        scalar_dt: true
         spin_up_cycles: 1
 
     reservoirs:

@@ -72,7 +72,6 @@ HydroRaVENS is configured through a YAML file (``config.yml``):
         water_year_start_month: 10
 
     general:
-        scalar_dt: true
         spin_up_cycles: 1
 
     reservoirs:

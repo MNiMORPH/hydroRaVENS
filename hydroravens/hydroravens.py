@@ -310,6 +310,12 @@ class Buckets(object):
     either downwards or out to the surface. Reservoirs are ordered from top
     (nearest Earth's surface) to bottom (deepest groundwater); this order
     controls the direction of infiltration between layers.
+
+    HydroRaVENS is designed as a daily-timestep model. This is a deliberate
+    design choice: the physical parameterisations — degree-day snowmelt,
+    Thornthwaite ET, and linear reservoir drainage — are climatological
+    approximations that are well-founded at daily resolution but lose physical
+    meaning at finer scales. The daily timestep is enforced in initialize().
     """
 
     def __init__(self, T_monthly_normals=None):
@@ -503,12 +509,19 @@ class Buckets(object):
             self.snowpack.Hwater = self.cfg['initial_conditions']['snowpack__mm_SWE']
         # Reservoir H0 values are set in the list comprehension above.
 
-        # Check that dt is 1 day everywhere.
-        # Do not work otherwise.
+        # Enforce the daily timestep. HydroRaVENS is a daily model by design:
+        # degree-day snowmelt, Thornthwaite ET, and linear reservoir drainage
+        # are all daily-scale parameterisations.
         if (self.hydrodata['Date'].diff()[1:] == pd.Timedelta('1 day')).all():
             self.dt = 1.
         else:
-            raise ValueError("All time steps must be 1 day.")
+            raise ValueError(
+                "HydroRaVENS requires a continuous daily time series "
+                "(exactly 1-day intervals throughout). Sub-daily or "
+                "irregular timesteps are not supported; the physical "
+                "parameterisations (degree-day snowmelt, Thornthwaite ET, "
+                "linear reservoir drainage) are daily-scale approximations."
+            )
 
         # Compute specific discharge from data
         self.hydrodata['Specific Discharge [mm/day]'] = (

@@ -226,7 +226,9 @@ Model Assumptions & Limitations
 
 * ⚠️ Lumped model (no spatial variability)
 * ⚠️ Linear reservoirs (may not capture threshold behavior)
-* ⚠️ Daily timestep only (not suitable for event-scale analysis)
+* ⚠️ Daily timestep by design — degree-day snowmelt, Thornthwaite ET, and
+  linear reservoir drainage are daily-scale parameterisations that lose
+  physical meaning at finer resolution
 * ⚠️ Simplified groundwater–surface-water interaction
 * ⚠️ Snowpack simplified (PDD model; ignores energy balance)
 * ⚠️ No representation of lakes or artificial storage
