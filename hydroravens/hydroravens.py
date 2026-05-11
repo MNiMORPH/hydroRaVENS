@@ -277,6 +277,12 @@ class Snowpack(object):
             Leftover melt energy after the snowpack is exhausted, expressed
             as degree-day equivalent [°C·day] = leftover mm SWE / melt_factor.
             Zero when SWE is not fully depleted.
+
+            The melt factor (mm SWE °C⁻¹ day⁻¹) serves as the bridge
+            between the PDD snowmelt representation and the frozen ground
+            index (FGI): dividing excess melt depth (mm SWE) by melt_factor
+            recovers the equivalent thermal forcing in °C·day, which is the
+            currency the FGI uses. See Buckets._update_fgi().
         """
         if self.T <= 0:
             return 0.0
@@ -678,7 +684,10 @@ class Buckets(object):
             Degree-day equivalent of leftover melt energy from
             _compute_snowpack() [°C·day]. Reduces FGI alongside air
             temperature. Default 0 (temperature-only FGI, per Molnau &
-            Bissell).
+            Bissell). Computed as leftover_mm_SWE / melt_factor, where
+            melt_factor (mm SWE °C⁻¹ day⁻¹) converts the residual melt
+            depth back to the degree-day units that the FGI operates in.
+            See Snowpack.melt().
 
         Returns
         -------

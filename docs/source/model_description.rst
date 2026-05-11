@@ -43,14 +43,27 @@ If mean air temperature is provided, snowpack processes are enabled.
 
 **Melt:**
   When :math:`T > 0°C`, melt is computed using the positive-degree-day (PDD) approach:
-  
+
   .. math::
-  
-      M_t = \min(\text{SWE}_t, \alpha \cdot T_t \cdot \Delta t)
-  
-  where :math:`\alpha` is the melt factor (mm SWE per °C per day).
-  
-  All melt is routed directly to the top reservoir.
+
+      M_t = \min(\text{SWE}_t,\ \alpha \cdot T_t \cdot \Delta t + M_{\text{ROS},t})
+
+  where :math:`\alpha` is the melt factor (mm SWE °C⁻¹ day⁻¹) and
+  :math:`M_{\text{ROS}}` is the rain-on-snow sensible-heat contribution
+  (see below). All melt is routed directly to the top reservoir.
+
+**Rain-on-snow (ROS) sensible heat:**
+  Rain arriving at temperature :math:`T > 0°C` carries thermal energy that
+  can melt additional snow:
+
+  .. math::
+
+      M_{\text{ROS},t} = \frac{c_p}{L_f} \cdot T_t \cdot P_t
+
+  where :math:`c_p / L_f \approx 0.01253\ °C^{-1}` is the ratio of the
+  specific heat of water to the latent heat of fusion. This term is
+  typically small relative to the PDD term except during warm rain-on-snow
+  events (McCabe et al. 2007; Würzer et al. 2016).
 
 **ET deficit:**
   When precipitation minus ET is negative, the deficit first sublimates
@@ -62,6 +75,55 @@ If mean air temperature is provided, snowpack processes are enabled.
 
   Any deficit exceeding available SWE is passed to the top subsurface
   reservoir and, if still unmet, carried forward to the next time step.
+
+Frozen Ground Module (Optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When a ``fdd_threshold`` is set, the model tracks a **frozen ground index**
+(FGI; Molnau & Bissell 1983) that accumulates freezing degree-days and
+decays during warm periods:
+
+.. math::
+
+    \text{FGI}_t = \max\!\left(0,\ \text{FGI}_{t-1} - T_t - D_t\right)
+
+where :math:`T_t` is mean air temperature (°C; negative values increase
+FGI, positive values reduce it) and :math:`D_t` is an additional thaw
+credit described below. When :math:`\text{FGI}_t` exceeds
+``fdd_threshold``, the top reservoir's exfiltration fraction is set to
+1.0 so that all drainage becomes direct runoff, simulating frozen-soil
+blockage of deep infiltration.
+
+**Coupling snowmelt and frozen-ground thaw via the melt factor:**
+  The PDD melt factor :math:`\alpha` has units of mm SWE per °C·day,
+  making it a natural conversion factor between the thermal forcing
+  (°C·day) and a water-equivalent depth (mm SWE):
+
+  .. math::
+
+      \text{mm SWE} = \alpha \cdot \text{°C·day}
+      \qquad \Longleftrightarrow \qquad
+      \text{°C·day} = \frac{\text{mm SWE}}{\alpha}
+
+  When total melt energy in a timestep exceeds the available SWE, the
+  leftover energy :math:`\Delta E` is expressed in mm SWE. Dividing by
+  :math:`\alpha` converts it back to degree-days — the same currency the
+  FGI uses — so the residual can be credited toward thawing frozen ground:
+
+  .. math::
+
+      D_t = \frac{\max(0,\ \alpha T_t \Delta t + M_{\text{ROS},t} - \text{SWE}_t)}{\alpha}
+
+  This means that once the snowpack is fully depleted, any remaining
+  thermal energy continues to thaw frozen soil rather than being
+  discarded. The melt factor thus serves as the bridge between the two
+  empirical degree-day representations.
+
+  Note that :math:`\alpha` characterises the snow surface, not the soil.
+  Applying the same conversion to the soil implicitly assumes that the
+  atmosphere-to-surface thermal coupling is the same in both cases, which
+  is a simplification. Within a degree-day framework, however, the
+  approach is internally self-consistent.
 
 Linear Reservoir Cascade
 ~~~~~~~~~~~~~~~~~~~~~~~~
