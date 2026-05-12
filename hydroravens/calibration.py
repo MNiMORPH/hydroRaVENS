@@ -333,7 +333,7 @@ def _steady_state_depths(reservoirs, mean_q):
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
-                  direct_runoff_fraction=None,
+                  direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
                   initial_states=None,
                   start=None, end=None, spin_up_cycles=3,
@@ -504,6 +504,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         b.direct_runoff_fraction = direct_runoff_fraction
         k += 1
 
+    if baseflow_Q is not None:
+        b.baseflow_Q = baseflow_Q
+        k += 1
+
     if modules is not None:
         _MATTR = {'snowpack':      'use_snowpack',
                   'frozen_ground': 'use_frozen_ground',
@@ -562,7 +566,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if routing_K is not None:
         routed = _nash_cascade(q_mod.to_numpy(), routing_N, routing_K)
         q_mod  = pd.Series(routed, index=q_mod.index, name=q_mod.name)
-        b.hydrodata['Specific Discharge (modeled) [mm/day]'] = q_mod
+    # Add constant regional baseflow after routing (external to reservoir cascade).
+    if b.baseflow_Q != 0.0:
+        q_mod = q_mod + b.baseflow_Q
+    b.hydrodata['Specific Discharge (modeled) [mm/day]'] = q_mod
 
     # --- Mask to scoring window ---
     q_obs = b.hydrodata['Specific Discharge [mm/day]']

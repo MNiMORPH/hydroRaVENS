@@ -500,6 +500,7 @@ class Buckets(object):
             )
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
+        self.baseflow_Q = self.cfg['catchment'].get('baseflow_Q', 0.0)
 
         # Module enable/disable flags — read from config, default to on
         # (except direct_runoff, which defaults to off).
