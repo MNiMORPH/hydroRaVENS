@@ -739,14 +739,13 @@ class Buckets(object):
 
         References
         ----------
-        Molnau & Bissell (1983) https://westernsnowconference.org/sites/
-            westernsnowconference.org/PDFs/1983Molnau.pdf
-            (Western Snow Conference proceedings — cited as the original
-            source for this specific FGI formulation)
+        Molnau & Bissell (1983) https://westernsnowconference.org/bibliography/1983Molnau.pdf
+            (Western Snow Conference proceedings — original source for the
+            FGI formulation and the exponential snow insulation factor)
         Shanley & Chalmers (1999) doi:10.1002/(SICI)1099-1085(199909)13:12/13
             <1843::AID-HYP879>3.0.CO;2-G
         Dunne & Black (1971) doi:10.1029/WR007i005p01160
-        Snow insulation parameterisation (exponential form):
+        Snow insulation parameterisation (exponential form, original: M&B 1983):
             LISFLOOD: van der Knijff et al. (2010) doi:10.1080/02626660902852568
             GSSHA: Downer & Ogden (2004) doi:10.1061/(ASCE)1084-0699(2004)9:3(254)
 

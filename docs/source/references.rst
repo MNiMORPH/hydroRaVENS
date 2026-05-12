@@ -36,8 +36,9 @@ https://doi.org/10.1029/WR007i005p01160
 Molnau, M., & Bissell, V. C. (1983). A continuous frozen ground index for
 flood forecasting. *Proceedings of the 51st Annual Western Snow Conference*,
 pp. 109--119.
-https://westernsnowconference.org/sites/westernsnowconference.org/PDFs/1983Molnau.pdf
-(Original source for the continuous frozen ground index formulation.)
+https://westernsnowconference.org/bibliography/1983Molnau.pdf
+(Original source for the continuous frozen ground index formulation,
+including the exponential snow-depth insulation factor.)
 
 Shanley, J. B., & Chalmers, A. (1999). The effect of frozen soil on snowmelt
 runoff at Sleepers River, Vermont.

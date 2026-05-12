@@ -177,8 +177,8 @@ infiltration.
   0.0). The factor is applied to both freezing and thawing temperature
   forcing; meltwater heat delivery (``excess_dd``) is not scaled because
   meltwater reaches the soil surface directly. The parameterisation
-  follows LISFLOOD (van der Knijff et al. 2010) and GSSHA (Downer &
-  Ogden 2004), which implement the same exponential form.
+  originates in Molnau & Bissell (1983), and was adopted by LISFLOOD
+  (van der Knijff et al. 2010) and GSSHA (Downer & Ogden 2004).
 
   .. note::
 

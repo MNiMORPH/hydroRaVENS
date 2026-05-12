@@ -372,8 +372,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     fdd_threshold : float or None, optional
         Frozen ground index threshold [°C·day].  The frozen ground index
         accumulates freezing degree-days and decays during warming
-        (Molnau & Bissell 1983, https://westernsnowconference.org/sites/
-        westernsnowconference.org/PDFs/1983Molnau.pdf).  When the index
+        (Molnau & Bissell 1983, https://westernsnowconference.org/bibliography/1983Molnau.pdf).  When the index
         exceeds fdd_threshold, infiltration from the top reservoir to
         deeper layers is set to zero for that timestep (all drainage
         becomes direct runoff).  None (default) disables the effect.

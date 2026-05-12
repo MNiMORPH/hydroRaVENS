@@ -212,8 +212,9 @@ the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
        temperature reaching the soil as
        :math:`T_\text{eff} = T \cdot e^{-k \cdot \text{SWE}}`, reducing
        FGI accumulation under deep snowpack. Default ``0.0`` (no
-       insulation). Literature starting point: LISFLOOD uses ~0.057 mm⁻¹
-       (van der Knijff et al. 2010). **Do not calibrate simultaneously
+       insulation). The exponential form originates in Molnau & Bissell
+       (1983); LISFLOOD uses ~0.057 mm⁻¹ (van der Knijff et al. 2010)
+       as a literature starting point. **Do not calibrate simultaneously
        with** ``fdd_threshold`` — the two parameters are correlated and
        will produce equifinal solutions. Fix one from independent data
        before calibrating the other; see :doc:`model_description`.
@@ -311,6 +312,7 @@ Complete Example
     
     snowmelt:
         PDD_melt_factor: 1.0
+        fgi_decay_coeff: 0.97       # default; Molnau & Bissell (1983)
 
 Illustrative Starting Points
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
