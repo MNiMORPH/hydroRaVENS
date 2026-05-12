@@ -8,7 +8,7 @@ Figure layout
 Left column  : precipitation (top, inverted) + observed/modelled discharge
 Right column : flow duration curve (log scale) with observed BFI annotated
 
-Usage (from cannon_river/):
+Usage (from cannon_inverse/):
     python plot_best.py                      # uses dakota.dat, saves best_fit.png
     python plot_best.py --dat dakota_test.dat --save test_fit.png
 """
@@ -27,13 +27,26 @@ CFG_TEMPLATE  = 'cannon_cfg_template.yml'
 OBJECTIVE_COL = 'neg_kge'
 ROUTING_N     = 2      # Nash-cascade shape; must match driver.py ROUTING_N
 
+_MODULE_PARAMS_MAP = {
+    'snowpack':      ['PDD_melt_factor'],
+    'frozen_ground': ['log__fdd_threshold', 'snow_insulation_k'],
+    'direct_runoff': ['f_direct_runoff'],
+    'rain_on_snow':  [],
+}
+
 def _load_params_yml(path):
     try:
         with open(path) as f:
             pcfg = yaml.safe_load(f)
-        return (pcfg['driver']['metric'],
-                pcfg.get('modules', {}),
-                pcfg['parameters'])
+        modules = pcfg.get('modules', {})
+        params  = pcfg['parameters']
+        # Mirror generate_dakota_in.py auto-fix so active flags match dakota.in.
+        for mod, names in _MODULE_PARAMS_MAP.items():
+            if not modules.get(mod, True):
+                for name in names:
+                    if name in params:
+                        params[name]['active'] = False
+        return (pcfg['driver']['metric'], modules, params)
     except FileNotFoundError:
         return 'KGE_logKGE_logFDC', {}, {}
 
@@ -45,6 +58,13 @@ _PARAMS = None
 
 def _is_active(name):
     return (_PARAMS or {}).get(name, {}).get('active', False)
+
+
+def _get(row, name):
+    """Return active param value from dat row, or fixed fallback from params.yml."""
+    if _is_active(name):
+        return float(row[name])
+    return float((_PARAMS or {}).get(name, {}).get('fixed', 0.0))
 
 
 def read_best_params(dat_file):
@@ -59,26 +79,24 @@ def read_best_params(dat_file):
     return df.loc[df[OBJECTIVE_COL].idxmin()]
 
 
-def run_model(params):
-    kwargs = dict(
-        t_efold        = [10 ** params['log__t_efold_shallow'],
-                          10 ** params['log__t_efold_soil'],
-                          10 ** params['log__t_efold_karst']],
-        f_to_discharge = [params['f_exfiltration_shallow'],
-                          params['f_exfiltration_soil']],
-        melt_factor    =  params['PDD_melt_factor'],
-        fdd_threshold  =  10 ** params['log__fdd_threshold'],
-        Hmax           = [10 ** params['log__Hmax_shallow']],
-        routing_K      =  10 ** params['log__routing_K'],
-        routing_N      =  ROUTING_N,
-        modules        =  MODULES,
-        metric         =  METRIC,
+def run_model(row):
+    return run_and_score(
+        CFG_TEMPLATE,
+        t_efold               = [10 ** _get(row, 'log__t_efold_shallow'),
+                                  10 ** _get(row, 'log__t_efold_soil'),
+                                  10 ** _get(row, 'log__t_efold_karst')],
+        f_to_discharge        = [_get(row, 'f_exfiltration_shallow'),
+                                  _get(row, 'f_exfiltration_soil')],
+        melt_factor           =  _get(row, 'PDD_melt_factor'),
+        fdd_threshold         =  10 ** _get(row, 'log__fdd_threshold'),
+        snow_insulation_k     =  _get(row, 'snow_insulation_k'),
+        Hmax                  = [10 ** _get(row, 'log__Hmax_shallow')],
+        direct_runoff_fraction=  _get(row, 'f_direct_runoff'),
+        routing_K             =  10 ** _get(row, 'log__routing_K'),
+        routing_N             =  ROUTING_N,
+        modules               =  MODULES,
+        metric                =  METRIC,
     )
-    # Auto-detect f_direct_runoff: use it if present and finite in the dat file
-    val = params.get('f_direct_runoff', None)
-    if val is not None and pd.notna(val):
-        kwargs['direct_runoff_fraction'] = float(val)
-    return run_and_score(CFG_TEMPLATE, **kwargs)
 
 
 def make_plot(result, params, save_path, metric=METRIC):
@@ -127,11 +145,10 @@ def make_plot(result, params, save_path, metric=METRIC):
     plt.setp(ax_q.get_xticklabels(), rotation=30, ha='right')
 
     # Annotation box
-    t_shallow  = 10 ** params['log__t_efold_shallow']
-    t_soil     = 10 ** params['log__t_efold_soil']
-    t_karst    = 10 ** params['log__t_efold_karst']
-    fdd_thresh = 10 ** params['log__fdd_threshold']
-    routing_K  = 10 ** params['log__routing_K']
+    t_shallow  = 10 ** _get(params, 'log__t_efold_shallow')
+    t_soil     = 10 ** _get(params, 'log__t_efold_soil')
+    t_karst    = 10 ** _get(params, 'log__t_efold_karst')
+    routing_K  = 10 ** _get(params, 'log__routing_K')
 
     score_str = f'logKGE = {log_kge:.3f}   NSE = {nse:.3f}   KGE = {kge:.3f}   KGE$_{{logFDC}}$ = {kge_logfdc:.3f}   AIC = {aic:.1f}'
     param_lines = (
@@ -139,15 +156,19 @@ def make_plot(result, params, save_path, metric=METRIC):
         f'$\\tau_{{sh}}$ = {t_shallow:.1f} d,  '
         f'$\\tau_{{soil}}$ = {t_soil:.0f} d,  '
         f'$\\tau_{{karst}}$ = {t_karst:.0f} d\n'
-        f'$f_{{sh}}$ = {params["f_exfiltration_shallow"]:.3f},  '
-        f'$f_{{soil}}$ = {params["f_exfiltration_soil"]:.3f},  '
-        f'PDD = {params["PDD_melt_factor"]:.2f} mm °C$^{{-1}}$ d$^{{-1}}$\n'
-        f'$H_{{max}}$ = {10**params["log__Hmax_shallow"]:.0f} mm,  '
-        f'FDD$_{{thresh}}$ = {fdd_thresh:.0f} °C·d\n'
-        f'$K_{{route}}$ = {routing_K:.2f} d  (N={ROUTING_N})'
+        f'$f_{{sh}}$ = {_get(params, "f_exfiltration_shallow"):.3f},  '
+        f'$f_{{soil}}$ = {_get(params, "f_exfiltration_soil"):.3f}'
     )
+    if _is_active('PDD_melt_factor'):
+        param_lines += f',  PDD = {_get(params, "PDD_melt_factor"):.2f} mm °C$^{{-1}}$ d$^{{-1}}$'
+    param_lines += f'\n$H_{{max}}$ = {10 ** _get(params, "log__Hmax_shallow"):.0f} mm'
+    if _is_active('log__fdd_threshold'):
+        param_lines += f',  FDD$_{{thresh}}$ = {10 ** _get(params, "log__fdd_threshold"):.0f} °C·d'
+    if _is_active('snow_insulation_k'):
+        param_lines += f',  $k_{{ins}}$ = {_get(params, "snow_insulation_k"):.4f} mm$^{{-1}}$ SWE'
+    param_lines += f'\n$K_{{route}}$ = {routing_K:.2f} d  (N={ROUTING_N})'
     if _is_active('f_direct_runoff'):
-        param_lines += f'\n$\\gamma_{{direct}}$ = {params["f_direct_runoff"]:.3f}'
+        param_lines += f',  $\\gamma_{{direct}}$ = {_get(params, "f_direct_runoff"):.3f}'
 
     ann = score_str + '\n' + param_lines
     ax_q.text(0.02, 0.97, ann, transform=ax_q.transAxes,
@@ -184,24 +205,25 @@ if __name__ == '__main__':
 
     best = read_best_params(args.dat)
 
-    t_shallow = 10 ** best['log__t_efold_shallow']
-    t_soil    = 10 ** best['log__t_efold_soil']
-    t_karst   = 10 ** best['log__t_efold_karst']
-    routing_K = 10 ** best['log__routing_K']
     print(f'\nBest evaluation: {int(best["eval_id"])}')
     print(f'  metric           = {METRIC}')
-    print(f'  t_efold_shallow  = {t_shallow:.1f} days')
-    print(f'  t_efold_soil     = {t_soil:.0f} days')
-    print(f'  t_efold_karst    = {t_karst:.0f} days')
-    print(f'  f_exfilt_shallow = {best["f_exfiltration_shallow"]:.4f}')
-    print(f'  f_exfilt_soil    = {best["f_exfiltration_soil"]:.4f}')
-    print(f'  PDD_melt_factor  = {best["PDD_melt_factor"]:.4f} mm/°C/day')
-    print(f'  Hmax_shallow     = {10**best["log__Hmax_shallow"]:.1f} mm')
-    print(f'  fdd_threshold    = {10**best["log__fdd_threshold"]:.1f} °C·day')
-    print(f'  routing_K        = {routing_K:.3f} days  (N={ROUTING_N},'
-          f' mean travel time = {ROUTING_N * routing_K:.2f} days)')
+    print(f'  t_efold_shallow  = {10 ** _get(best, "log__t_efold_shallow"):.1f} days')
+    print(f'  t_efold_soil     = {10 ** _get(best, "log__t_efold_soil"):.0f} days')
+    print(f'  t_efold_karst    = {10 ** _get(best, "log__t_efold_karst"):.0f} days')
+    print(f'  f_exfilt_shallow = {_get(best, "f_exfiltration_shallow"):.4f}')
+    print(f'  f_exfilt_soil    = {_get(best, "f_exfiltration_soil"):.4f}')
+    if _is_active('PDD_melt_factor'):
+        print(f'  PDD_melt_factor  = {_get(best, "PDD_melt_factor"):.4f} mm/°C/day')
+    print(f'  Hmax_shallow     = {10 ** _get(best, "log__Hmax_shallow"):.1f} mm')
+    if _is_active('log__fdd_threshold'):
+        print(f'  fdd_threshold    = {10 ** _get(best, "log__fdd_threshold"):.1f} °C·day')
+    if _is_active('snow_insulation_k'):
+        print(f'  snow_insulation_k= {_get(best, "snow_insulation_k"):.4f} mm⁻¹ SWE')
+    rK = 10 ** _get(best, 'log__routing_K')
+    print(f'  routing_K        = {rK:.3f} days  (N={ROUTING_N},'
+          f' mean travel time = {ROUTING_N * rK:.2f} days)')
     if _is_active('f_direct_runoff'):
-        print(f'  f_direct_runoff  = {best["f_direct_runoff"]:.4f}')
+        print(f'  f_direct_runoff  = {_get(best, "f_direct_runoff"):.4f}')
 
     result = run_model(best)
     b     = result.buckets
