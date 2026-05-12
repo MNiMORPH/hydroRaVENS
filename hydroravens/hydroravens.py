@@ -531,9 +531,12 @@ class Buckets(object):
         self.enforce_water_balance = enforce_water_balance
 
         # Fraction of positive daily recharge that bypasses the reservoir
-        # cascade and exits directly as runoff.  Represents infiltration-excess
-        # (Hortonian) overland flow and other fast-bypass pathways.
-        # Default 0 (all water enters the top reservoir).
+        # cascade and exits directly as runoff.  Conceptually inspired by
+        # Hortonian (infiltration-excess) overland flow, but at a daily
+        # timestep rainfall intensity is unavailable, so the fraction cannot
+        # be a rigorous physical representation -- except in extreme events
+        # where intense rainfall dominates the daily total.  In practice it
+        # acts as a calibrated fast-bypass fraction, off by default.
         self.direct_runoff_fraction = self.cfg['general'].get(
             'direct_runoff_fraction', 0.0)
 
@@ -812,7 +815,7 @@ class Buckets(object):
                         self.hydrodata['Precipitation [mm/day]'][time_step] -
                         self.hydrodata['ET for model [mm/day]'][time_step] +
                         self.H_deficit_carry)
-                # Direct runoff: bypass the reservoir cascade entirely.
+                # Hortonian-inspired bypass: fraction exits without entering reservoirs.
                 _q_direct = (max(0.0, _recharge) * self.direct_runoff_fraction
                              if self.use_direct_runoff else 0.0)
                 qi += _q_direct

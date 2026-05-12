@@ -361,10 +361,14 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         the value in cfg.
     direct_runoff_fraction : float or None, optional
         Fraction (0–1) of positive daily recharge that bypasses the
-        reservoir cascade and exits directly as runoff.  Represents
-        infiltration-excess overland flow and other fast-bypass pathways
-        that are independent of antecedent storage.  None (default) leaves
-        the value from the YAML config (itself defaulting to 0).
+        reservoir cascade and exits directly as runoff.  Conceptually
+        inspired by Hortonian (infiltration-excess) overland flow, but
+        at a daily timestep rainfall intensity is unavailable, so the
+        fraction is not a rigorous physical representation -- except in
+        extreme events where intense rainfall dominates the daily total.
+        In practice it acts as a calibrated fast-bypass fraction.
+        None (default) leaves the value from the YAML config (itself
+        defaulting to 0; off by default).
     fdd_threshold : float or None, optional
         Frozen ground index threshold [°C·day].  The frozen ground index
         accumulates freezing degree-days and decays during warming
