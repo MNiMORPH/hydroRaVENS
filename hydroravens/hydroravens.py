@@ -488,7 +488,8 @@ class Buckets(object):
                           "You are not conserving mass.")
 
         # Set scalar variables based on yaml
-        self.melt_factor = self.cfg['snowmelt']['PDD_melt_factor']
+        self.melt_factor         = self.cfg['snowmelt']['PDD_melt_factor']
+        self.snow_insulation_k   = self.cfg['snowmelt'].get('snow_insulation_k', 0.0)
         self.et_method = self.cfg['catchment']['evapotranspiration_method']
         if self.et_method == 'ThorntwaiteChang2019' and not hasattr(self, 'Chang_I'):
             raise ValueError(
@@ -716,9 +717,14 @@ class Buckets(object):
         """
         Update the frozen ground index; flag top reservoir as frozen if needed.
 
-        FGI(t) = max(0, FGI(t-1) - T_mean - excess_dd)
+        FGI(t) = max(0, FGI(t-1) - T_eff - excess_dd)
+          T_eff = T_mean · exp(-snow_insulation_k · SWE)
           T_mean < 0  → FGI rises  (freezing degree-days accumulate)
           T_mean > 0  → FGI falls  (warm air thaws)
+          Snow insulation damps both directions: deep snowpack buffers
+          the soil from cold air (reduces freezing) and from warm air
+          (slows spring thaw). excess_dd is not insulation-scaled because
+          meltwater delivers heat directly to the soil surface.
           excess_dd   → additional thaw credited from leftover snowmelt
                         energy [°C·day] = leftover mm SWE / melt_factor
 
@@ -735,6 +741,9 @@ class Buckets(object):
         Shanley & Chalmers (1999) doi:10.1002/(SICI)1099-1085(199909)13:12/13
             <1843::AID-HYP879>3.0.CO;2-G
         Dunne & Black (1971) doi:10.1029/WR007i005p01160
+        Snow insulation parameterisation (exponential form):
+            LISFLOOD: van der Knijff et al. (2010) doi:10.1080/02626660902852568
+            GSSHA: Downer & Ogden (2004) doi:10.1061/(ASCE)1084-0699(2004)9:3(254)
 
         Parameters
         ----------
@@ -747,7 +756,8 @@ class Buckets(object):
             Bissell). Computed as leftover_mm_SWE / melt_factor, where
             melt_factor (mm SWE °C⁻¹ day⁻¹) converts the residual melt
             depth back to the degree-day units that the FGI operates in.
-            See Snowpack.melt().
+            See Snowpack.melt(). Not scaled by snow insulation because
+            meltwater delivers heat directly to the soil surface.
 
         Returns
         -------
@@ -764,8 +774,9 @@ class Buckets(object):
                 "fdd_threshold is set but 'Mean Temperature [C]' is missing "
                 "from the input data. FGI requires temperature data."
             )
-        T = self.hydrodata['Mean Temperature [C]'][time_step]
-        self._fgi = max(0.0, self._fgi - T - excess_dd)
+        T     = self.hydrodata['Mean Temperature [C]'][time_step]
+        T_eff = T * np.exp(-self.snow_insulation_k * self.snowpack.Hwater)
+        self._fgi = max(0.0, self._fgi - T_eff - excess_dd)
         if self._fgi > self.fdd_threshold:
             self.reservoirs[0].f_to_discharge = 1.0
         return f0

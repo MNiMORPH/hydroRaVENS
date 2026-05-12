@@ -198,13 +198,22 @@ the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
    * - ``PDD_melt_factor``
      - float
      - Melt rate (mm SWE per °C per day)
+   * - ``snow_insulation_k``
+     - float
+     - Snow insulation decay constant (mm⁻¹ SWE). Scales effective air
+       temperature reaching the soil as
+       :math:`T_\text{eff} = T \cdot e^{-k \cdot \text{SWE}}`, reducing
+       FGI accumulation under deep snowpack. Default ``0.0`` (no
+       insulation). Literature starting point: LISFLOOD uses ~0.057 mm⁻¹
+       (van der Knijff et al. 2010).
 
 Example:
 
 .. code-block:: yaml
 
     snowmelt:
-        PDD_melt_factor: 1.0  # 1 mm SWE melts per °C per day
+        PDD_melt_factor: 1.0     # 1 mm SWE melts per °C per day
+        snow_insulation_k: 0.057 # LISFLOOD default; set 0.0 to disable
 
 The ``modules`` section
 ~~~~~~~~~~~~~~~~~~~~~~~

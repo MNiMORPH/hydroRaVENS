@@ -36,6 +36,7 @@ reservoirs:
 
 snowmelt:
   PDD_melt_factor: 1.0   # mm SWE per positive degC per day (placeholder; overridden)
+  snow_insulation_k: 0.0 # mm⁻¹ SWE; 0 = no insulation; overridden by driver if active
 
 modules:
   snowpack:      true

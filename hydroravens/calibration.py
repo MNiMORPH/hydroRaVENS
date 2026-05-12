@@ -332,7 +332,7 @@ def _steady_state_depths(reservoirs, mean_q):
 # ---------------------------------------------------------------------------
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
-                  melt_factor=None, fdd_threshold=None,
+                  melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
                   direct_runoff_fraction=None,
                   modules=None,
                   initial_states=None,
@@ -377,6 +377,16 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         exceeds fdd_threshold, infiltration from the top reservoir to
         deeper layers is set to zero for that timestep (all drainage
         becomes direct runoff).  None (default) disables the effect.
+    snow_insulation_k : float or None, optional
+        Snow insulation decay constant [mm⁻¹ SWE].  Scales the effective
+        air temperature reaching the soil as T_eff = T · exp(-k · SWE),
+        reducing FGI accumulation under a deep snowpack.  Applied to
+        both freezing and thawing temperature forcing; excess degree-days
+        from meltwater (excess_dd) are not scaled because meltwater
+        delivers heat directly to the soil surface.  None (default)
+        leaves the value from cfg (itself defaulting to 0.0, i.e. no
+        insulation).  Literature values: LISFLOOD uses ~0.057 mm⁻¹;
+        GSSHA default is 0.5 (units ambiguous in original source).
     initial_states : dict, optional
         Starting reservoir water depths, snowpack SWE, and frozen ground
         index, as returned by a previous call's CalibResult.final_states.
@@ -485,6 +495,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     if fdd_threshold is not None:
         b.fdd_threshold = fdd_threshold
+        k += 1
+
+    if snow_insulation_k is not None:
+        b.snow_insulation_k = snow_insulation_k
         k += 1
 
     if direct_runoff_fraction is not None:
