@@ -91,6 +91,14 @@ parameters:
     fixed:   1.0
     active:  true
 
+  snow_insulation_k:
+    description: "snow insulation decay constant [mm⁻¹ SWE]; T_eff = T·exp(-k·SWE); 0 = off"
+    lower:   0.0
+    upper:   0.15
+    initial: 0.057
+    fixed:   0.0   # 0 = insulation disabled
+    active:  false
+
   f_direct_runoff:
     description: "fast-bypass fraction of daily recharge; Hortonian-inspired but not rigorous at daily scale"
     lower:   0.0

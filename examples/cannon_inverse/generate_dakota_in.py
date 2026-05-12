@@ -19,7 +19,7 @@ modules = cfg.get('modules', {})
 # of its own active flag.
 _MODULE_PARAMS = {
     'snowpack':      ['PDD_melt_factor'],
-    'frozen_ground': ['log__fdd_threshold'],
+    'frozen_ground': ['log__fdd_threshold', 'snow_insulation_k'],
     'direct_runoff': ['f_direct_runoff'],
     'rain_on_snow':  [],
 }
