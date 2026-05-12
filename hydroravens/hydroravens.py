@@ -499,14 +499,25 @@ class Buckets(object):
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
 
+        # Module enable/disable flags — read from config, default to on
+        # (except direct_runoff, which defaults to off).
+        _modules = self.cfg.get('modules', {})
+        self.use_snowpack      = _modules.get('snowpack',      True)
+        self.use_frozen_ground = _modules.get('frozen_ground', True)
+        self.use_rain_on_snow  = _modules.get('rain_on_snow',  True)
+        self.use_direct_runoff = _modules.get('direct_runoff', False)
+
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
-        self.has_snowpack = 'Mean Temperature [C]' in self.hydrodata.columns
+        self.has_snowpack = (self.use_snowpack and
+                             'Mean Temperature [C]' in self.hydrodata.columns)
         if self.has_snowpack:
             # Instantiate snowpack
             self.snowpack = Snowpack(self.melt_factor)  # allow changes to melt factor later
+        elif 'Mean Temperature [C]' in self.hydrodata.columns and not self.use_snowpack:
+            pass  # snowpack deliberately disabled via modules config
         else:
-            warnings.warn('"Mean Temperature [C]" has not been set. '+
+            warnings.warn('"Mean Temperature [C]" has not been set. '
                           'No snowpack processes will be simulated.')
 
         # How many times to loop the full time series for the spin-up
@@ -693,7 +704,8 @@ class Buckets(object):
             P - self.hydrodata['ET for model [mm/day]'][time_step]
             + self.H_deficit_carry
         )
-        excess_dd = self.snowpack.melt(self.dt, P=P)
+        excess_dd = self.snowpack.melt(self.dt,
+                                       P=(P if self.use_rain_on_snow else 0.0))
         self.H_deficit_carry = self.snowpack.H_deficit
         return excess_dd
 
@@ -741,7 +753,7 @@ class Buckets(object):
             frozen-ground override. Restore it after the discharge loop.
         """
         f0 = self.reservoirs[0].f_to_discharge
-        if np.isinf(self.fdd_threshold):
+        if not self.use_frozen_ground or np.isinf(self.fdd_threshold):
             return f0
 
         if 'Mean Temperature [C]' not in self.hydrodata.columns:
@@ -801,7 +813,8 @@ class Buckets(object):
                         self.hydrodata['ET for model [mm/day]'][time_step] +
                         self.H_deficit_carry)
                 # Direct runoff: bypass the reservoir cascade entirely.
-                _q_direct = max(0.0, _recharge) * self.direct_runoff_fraction
+                _q_direct = (max(0.0, _recharge) * self.direct_runoff_fraction
+                             if self.use_direct_runoff else 0.0)
                 qi += _q_direct
                 self.reservoirs[i].recharge(_recharge - _q_direct)
             else:

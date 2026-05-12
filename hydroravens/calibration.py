@@ -333,6 +333,7 @@ def _steady_state_depths(reservoirs, mean_q):
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   melt_factor=None, fdd_threshold=None,
                   direct_runoff_fraction=None,
+                  modules=None,
                   initial_states=None,
                   start=None, end=None, spin_up_cycles=3,
                   metric='KGE', routing_N=2, routing_K=None,
@@ -414,6 +415,11 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         applied and the model output is compared directly to observed
         discharge.  When provided, routing_K is counted as one free
         parameter.
+    modules : dict or None, optional
+        Enable/disable optional process modules.  Keys: ``'snowpack'``,
+        ``'frozen_ground'``, ``'rain_on_snow'``, ``'direct_runoff'``.
+        Values: bool.  Overrides the ``modules`` block in the YAML config.
+        Absent keys leave the YAML/default value unchanged.
     enforce_water_balance : bool, optional
         Whether to scale ET by a per-water-year multiplier so that
         P - Q - ET = 0 over each water year.  Default True.  Set to
@@ -479,6 +485,17 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if direct_runoff_fraction is not None:
         b.direct_runoff_fraction = direct_runoff_fraction
         k += 1
+
+    if modules is not None:
+        _MATTR = {'snowpack':      'use_snowpack',
+                  'frozen_ground': 'use_frozen_ground',
+                  'rain_on_snow':  'use_rain_on_snow',
+                  'direct_runoff': 'use_direct_runoff'}
+        for mod, val in modules.items():
+            if mod in _MATTR:
+                setattr(b, _MATTR[mod], val)
+        if not b.use_snowpack:
+            b.has_snowpack = False
 
     if routing_K is not None:
         k += 1
