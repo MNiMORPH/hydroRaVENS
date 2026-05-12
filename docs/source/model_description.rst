@@ -156,6 +156,42 @@ blockage of deep infiltration.
   is a simplification. Within a degree-day framework, however, the
   approach is internally self-consistent.
 
+**Snow insulation:**
+  A deep snowpack buffers the soil surface from cold air, reducing the
+  effective freezing degree-days that accumulate in the FGI. This is
+  represented by an exponential insulation factor:
+
+  .. math::
+
+      T_{\text{eff},t} = T_t \cdot e^{-k \cdot \text{SWE}_t}
+
+  where :math:`k` (mm⁻¹ SWE) is the snow insulation decay constant
+  (``snow_insulation_k`` in the ``snowmelt`` config section; default
+  0.0). The factor is applied to both freezing and thawing temperature
+  forcing; meltwater heat delivery (``excess_dd``) is not scaled because
+  meltwater reaches the soil surface directly. The parameterisation
+  follows LISFLOOD (van der Knijff et al. 2010) and GSSHA (Downer &
+  Ogden 2004), which implement the same exponential form.
+
+  .. note::
+
+      ``snow_insulation_k`` and ``fdd_threshold`` are correlated: both
+      control how much frozen-ground effect the model sees. Calibrating
+      them simultaneously from streamflow alone leads to equifinality —
+      the optimizer trades a near-zero threshold against moderate
+      insulation rather than finding physically meaningful values for
+      either. Recommended practice:
+
+      * Fix ``snow_insulation_k`` at a literature or field-derived value
+        and calibrate only ``fdd_threshold``, or
+      * Leave ``snow_insulation_k = 0`` (default) and treat
+        ``fdd_threshold`` as the sole free FGI parameter.
+
+      The insulation term is most useful when independent observations
+      (soil temperature, frost depth) are available to constrain
+      :math:`k`, or for deep-snowpack alpine catchments where the
+      insulation effect is large relative to the threshold uncertainty.
+
 Direct Runoff Bypass (Optional)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

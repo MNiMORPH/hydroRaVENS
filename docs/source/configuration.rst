@@ -205,7 +205,10 @@ the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
        :math:`T_\text{eff} = T \cdot e^{-k \cdot \text{SWE}}`, reducing
        FGI accumulation under deep snowpack. Default ``0.0`` (no
        insulation). Literature starting point: LISFLOOD uses ~0.057 mm⁻¹
-       (van der Knijff et al. 2010).
+       (van der Knijff et al. 2010). **Do not calibrate simultaneously
+       with** ``fdd_threshold`` — the two parameters are correlated and
+       will produce equifinal solutions. Fix one from independent data
+       before calibrating the other; see :doc:`model_description`.
 
 Example:
 
