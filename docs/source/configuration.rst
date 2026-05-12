@@ -198,6 +198,14 @@ the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
    * - ``PDD_melt_factor``
      - float
      - Melt rate (mm SWE per °C per day)
+   * - ``fgi_decay_coeff``
+     - float
+     - Daily multiplicative decay applied to the FGI before the
+       temperature forcing is added:
+       :math:`\text{FGI}_t = A \cdot \text{FGI}_{t-1} - T_\text{eff}`.
+       Default ``0.97`` (3% passive decay per day), following Molnau &
+       Bissell (1983), LISFLOOD, and GSSHA. Prevents indefinite FGI
+       accumulation during long cold spells. Rarely needs changing.
    * - ``snow_insulation_k``
      - float
      - Snow insulation decay constant (mm⁻¹ SWE). Scales effective air

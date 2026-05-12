@@ -111,19 +111,26 @@ Frozen Ground Module (Optional)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When a ``fdd_threshold`` is set, the model tracks a **frozen ground index**
-(FGI; Molnau & Bissell 1983) that accumulates freezing degree-days and
-decays during warm periods:
+(FGI; Molnau & Bissell 1983) that accumulates freezing degree-days,
+decays passively each day, and additionally decays during warm periods:
 
 .. math::
 
-    \text{FGI}_t = \max\!\left(0,\ \text{FGI}_{t-1} - T_t - D_t\right)
+    \text{FGI}_t = \max\!\left(0,\ A \cdot \text{FGI}_{t-1} - T_{\text{eff},t} - D_t\right)
 
-where :math:`T_t` is mean air temperature (°C; negative values increase
-FGI, positive values reduce it) and :math:`D_t` is an additional thaw
-credit described below. When :math:`\text{FGI}_t` exceeds
-``fdd_threshold``, the top reservoir's exfiltration fraction is set to
-1.0 so that all drainage becomes direct runoff, simulating frozen-soil
-blockage of deep infiltration.
+where :math:`A` is the daily decay coefficient (``fgi_decay_coeff``,
+default 0.97 following Molnau & Bissell 1983 and all major
+implementations), :math:`T_{\text{eff},t} = T_t \cdot e^{-k \cdot
+\text{SWE}_t}` is the snow-insulation-adjusted temperature (°C; negative
+values increase FGI, positive values reduce it), and :math:`D_t` is an
+additional thaw credit described below. The passive decay :math:`(1 - A)
+\approx 3\%` per day prevents indefinite accumulation during long cold
+spells and sets a finite steady-state
+:math:`\text{FGI}^* = |T| / (1 - A)` for sustained temperature
+:math:`T < 0`. When :math:`\text{FGI}_t` exceeds ``fdd_threshold``, the
+top reservoir's exfiltration fraction is set to 1.0 so that all drainage
+becomes direct runoff, simulating frozen-soil blockage of deep
+infiltration.
 
 **Coupling snowmelt and frozen-ground thaw via the melt factor:**
   The PDD melt factor :math:`\alpha` has units of mm SWE per °C·day,

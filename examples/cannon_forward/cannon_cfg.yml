@@ -37,6 +37,7 @@ reservoirs:
 
 snowmelt:
   PDD_melt_factor: 1.0   # mm SWE per positive degC per day
+  fgi_decay_coeff: 0.97  # daily FGI decay (Molnau & Bissell 1983); rarely changed
   snow_insulation_k: 0.0 # mm⁻¹ SWE; 0 = no insulation (default)
 
 modules:

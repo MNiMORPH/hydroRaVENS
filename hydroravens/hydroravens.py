@@ -489,7 +489,8 @@ class Buckets(object):
 
         # Set scalar variables based on yaml
         self.melt_factor         = self.cfg['snowmelt']['PDD_melt_factor']
-        self.snow_insulation_k   = self.cfg['snowmelt'].get('snow_insulation_k', 0.0)
+        self.snow_insulation_k   = self.cfg['snowmelt'].get('snow_insulation_k',   0.0)
+        self.fgi_decay_coeff     = self.cfg['snowmelt'].get('fgi_decay_coeff',     0.97)
         self.et_method = self.cfg['catchment']['evapotranspiration_method']
         if self.et_method == 'ThorntwaiteChang2019' and not hasattr(self, 'Chang_I'):
             raise ValueError(
@@ -717,10 +718,14 @@ class Buckets(object):
         """
         Update the frozen ground index; flag top reservoir as frozen if needed.
 
-        FGI(t) = max(0, FGI(t-1) - T_eff - excess_dd)
+        FGI(t) = max(0, A · FGI(t-1) - T_eff - excess_dd)
+          A     = fgi_decay_coeff (default 0.97; Molnau & Bissell 1983)
           T_eff = T_mean · exp(-snow_insulation_k · SWE)
           T_mean < 0  → FGI rises  (freezing degree-days accumulate)
           T_mean > 0  → FGI falls  (warm air thaws)
+          A < 1 provides a passive daily decay that prevents indefinite
+          accumulation during long cold spells and sets a finite
+          steady-state: FGI* = |T| / (1 - A) for sustained temperature T.
           Snow insulation damps both directions: deep snowpack buffers
           the soil from cold air (reduces freezing) and from warm air
           (slows spring thaw). excess_dd is not insulation-scaled because
@@ -776,7 +781,7 @@ class Buckets(object):
             )
         T     = self.hydrodata['Mean Temperature [C]'][time_step]
         T_eff = T * np.exp(-self.snow_insulation_k * self.snowpack.Hwater)
-        self._fgi = max(0.0, self._fgi - T_eff - excess_dd)
+        self._fgi = max(0.0, self.fgi_decay_coeff * self._fgi - T_eff - excess_dd)
         if self._fgi > self.fdd_threshold:
             self.reservoirs[0].f_to_discharge = 1.0
         return f0
