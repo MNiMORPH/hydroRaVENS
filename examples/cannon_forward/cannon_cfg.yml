@@ -1,0 +1,45 @@
+# Cannon River catchment — hydroRaVENS configuration
+# Cannon River near Red Wing, Minnesota, USA
+# USGS gauge 05355200; drainage area 3800 km²
+# Daily record 1992–1995; ET supplied as datafile column.
+
+timeseries:
+  datafile: CannonTestInput.csv
+
+initial_conditions:
+  water_reservoir_effective_depths__mm:
+    - 15      # shallow / interflow reservoir
+    - 40      # soil-zone reservoir
+    - 500     # karst / bedrock reservoir
+  snowpack__mm_SWE: 0
+
+catchment:
+  drainage_basin_area__km2: 3800
+  evapotranspiration_method: datafile
+  water_year_start_month: 10   # USGS water year starts in October
+
+general:
+  spin_up_cycles: 3
+
+reservoirs:
+  e_folding_residence_times__days:
+    - 14      # shallow / interflow
+    - 40      # soil zone
+    - 500     # karst / bedrock
+  exfiltration_fractions:
+    - 0.19    # shallow: fraction draining to stream (remainder recharges soil)
+    - 0.76    # soil zone: fraction draining to stream (remainder recharges karst)
+    - 1.0     # karst: deepest layer, all drainage exits as baseflow
+  maximum_effective_depths__mm:
+    - 18      # shallow: saturation-excess overland flow when exceeded
+    - .inf    # soil zone: no saturation-excess threshold
+    - .inf    # karst: no saturation-excess threshold
+
+snowmelt:
+  PDD_melt_factor: 1.0   # mm SWE per positive degC per day
+
+modules:
+  snowpack:      true
+  frozen_ground: true
+  rain_on_snow:  true
+  direct_runoff: false

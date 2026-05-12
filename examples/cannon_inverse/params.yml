@@ -1,0 +1,108 @@
+# hydroRaVENS Cannon River calibration configuration
+# Edit this file to control active parameters, bounds, and run settings.
+# Run generate_dakota_in.py after any change to regenerate dakota.in.
+
+# Module toggles — controls both model behaviour and Dakota active/fixed status.
+# generate_dakota_in.py automatically fixes module-linked parameters when a
+# module is disabled (e.g. frozen_ground: false fixes log__fdd_threshold).
+modules:
+  snowpack:      true
+  frozen_ground: true
+  rain_on_snow:  true   # no dedicated calibration parameter; model-behaviour only
+  direct_runoff: false  # Hortonian-inspired bypass; leave off unless catchment warrants it
+
+dakota:
+  ego_initial_samples:       200
+  ego_seed:                  12345
+  ps_max_evaluations:        500
+  ps_convergence_tolerance:  1.0e-6
+  evaluation_concurrency:    4
+
+driver:
+  metric:         'KGE_logKGE_logFDC'  # KGE (peaks) + logKGE (low-flow timing) + KGE_logFDC (flow regime)
+  spin_up_cycles: 3
+  routing_N:      2        # Nash-cascade shape parameter (fixed)
+  decade_start:   null     # null = full record; e.g. '1990-01-01' for a decade
+  decade_end:     null
+
+parameters:
+
+  log__t_efold_shallow:
+    description: "log10 shallow/interflow e-folding time [days]"
+    lower:   0.3
+    upper:   2.0
+    initial: 1.2
+    fixed:   1.2
+    active:  true
+
+  log__t_efold_soil:
+    description: "log10 soil-zone e-folding time [days]"
+    lower:   1.0
+    upper:   2.7
+    initial: 1.8
+    fixed:   1.8
+    active:  true
+
+  log__t_efold_karst:
+    description: "log10 karst/bedrock e-folding time [days]"
+    lower:   2.5
+    upper:   4.5
+    initial: 3.5
+    fixed:   3.5
+    active:  true
+
+  f_exfiltration_shallow:
+    description: "fraction of shallow exfiltration to stream (remainder recharges soil)"
+    lower:   0.01
+    upper:   0.99
+    initial: 0.80
+    fixed:   0.80
+    active:  true
+
+  f_exfiltration_soil:
+    description: "fraction of soil-zone exfiltration to stream (remainder recharges karst)"
+    lower:   0.01
+    upper:   0.99
+    initial: 0.10
+    fixed:   0.10
+    active:  true
+
+  PDD_melt_factor:
+    description: "degree-day snowmelt rate [mm SWE / degC / day]"
+    lower:   0.1
+    upper:   10.0
+    initial: 1.0
+    fixed:   1.0
+    active:  true
+
+  log__Hmax_shallow:
+    description: "log10 shallow-reservoir max effective depth [mm]; saturation-excess OLF when exceeded"
+    lower:   1.0
+    upper:   3.5
+    initial: 2.3
+    fixed:   2.3
+    active:  true
+
+  log__fdd_threshold:
+    description: "log10 frozen-ground-index threshold [degC·day]; blocks shallow-to-soil infiltration"
+    lower:   0.0
+    upper:   3.0
+    initial: 1.0
+    fixed:   1.0
+    active:  true
+
+  f_direct_runoff:
+    description: "fast-bypass fraction of daily recharge; Hortonian-inspired but not rigorous at daily scale"
+    lower:   0.0
+    upper:   0.5
+    initial: 0.05
+    fixed:   0.0   # 0 = bypass disabled
+    active:  false
+
+  log__routing_K:
+    description: "log10 Nash-cascade storage time constant [days] (N=2; mean travel time = N*K)"
+    lower:   -1.0
+    upper:    1.0
+    initial:  0.0
+    fixed:    0.0
+    active:  true
