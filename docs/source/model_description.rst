@@ -28,6 +28,37 @@ where:
 * :math:`\Delta S` = change in storage (mm/day)
 * :math:`Q` = streamflow (mm/day)
 
+Optional Process Modules
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Several processes can be individually enabled or disabled through the
+``modules`` block in the configuration file (see :doc:`configuration`).
+All modules that require temperature data are silently inactive when
+``Mean Temperature [C]`` is absent from the input CSV, regardless of
+their flag setting.
+
+.. list-table::
+   :widths: 20 10 60
+   :header-rows: 1
+
+   * - Module
+     - Default
+     - Purpose
+   * - ``snowpack``
+     - on
+     - Accumulation, PDD melt, sublimation, and rain-on-snow.
+   * - ``frozen_ground``
+     - on
+     - Frozen ground index (FGI) that blocks deep infiltration.
+       Requires ``snowpack: true``.
+   * - ``rain_on_snow``
+     - on
+     - Sensible-heat contribution of warm rain on snowpack.
+       Requires ``snowpack: true``.
+   * - ``direct_runoff``
+     - off
+     - Hortonian-inspired bypass fraction. See below.
+
 Snowpack Module (Optional)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -124,6 +155,39 @@ blockage of deep infiltration.
   atmosphere-to-surface thermal coupling is the same in both cases, which
   is a simplification. Within a degree-day framework, however, the
   approach is internally self-consistent.
+
+Direct Runoff Bypass (Optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``direct_runoff: true`` in the ``modules`` block, a fixed fraction
+:math:`\gamma` of positive daily recharge is intercepted before it enters
+the top reservoir and routed directly to the stream:
+
+.. math::
+
+    Q_{\text{direct},t} = \gamma \cdot \max(0,\ R_t)
+
+    R_{\text{remaining},t} = (1 - \gamma) \cdot R_t
+
+where :math:`R_t` is the recharge available after ET (mm/day) and
+:math:`\gamma` is ``direct_runoff_fraction`` in the ``general``
+configuration section.
+
+This formulation is *Hortonian-inspired* — conceptually motivated by
+infiltration-excess overland flow — but cannot be a rigorous
+physical representation at the daily timestep. Without sub-daily
+intensity data, it is impossible to determine whether the daily
+precipitation total actually exceeds hydraulic conductivity at any
+moment. The bypass may nonetheless provide a useful empirical
+correction for catchments with significant impervious area, compacted
+soils, or urban fractions, and for days dominated by a single intense
+storm event (Yilmaz et al. 2008).
+
+The module is off by default (``direct_runoff: false``). Unless the
+calibration objective clearly demands it, leaving it off is recommended
+to avoid equifinality: the bypass can mimic effects already represented
+by the shallow-reservoir timescale, causing parameters to lose their
+intended physical interpretation.
 
 Linear Reservoir Cascade
 ~~~~~~~~~~~~~~~~~~~~~~~~

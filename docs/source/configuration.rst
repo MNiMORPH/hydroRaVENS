@@ -206,6 +206,64 @@ Example:
     snowmelt:
         PDD_melt_factor: 1.0  # 1 mm SWE melts per °C per day
 
+The ``modules`` section
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Optional process modules can be enabled or disabled through the ``modules``
+block. All four keys default to the values shown below if the block is
+absent.
+
+.. list-table::
+   :widths: 25 10 10 45
+   :header-rows: 1
+
+   * - Key
+     - Type
+     - Default
+     - Description
+   * - ``snowpack``
+     - bool
+     - ``true``
+     - Accumulation, melt (PDD), and rain-on-snow. Requires
+       ``Mean Temperature [C]`` in the input CSV; silently inactive
+       if the column is absent regardless of this flag.
+   * - ``frozen_ground``
+     - bool
+     - ``true``
+     - Frozen ground index (FGI; Molnau & Bissell 1983). Accumulates
+       freezing degree-days; blocks shallow-to-soil infiltration when
+       the index exceeds ``fdd_threshold``. Requires ``snowpack: true``
+       and temperature data.
+   * - ``rain_on_snow``
+     - bool
+     - ``true``
+     - Sensible-heat contribution of warm rain falling on snowpack.
+       Only active when ``snowpack: true``.
+   * - ``direct_runoff``
+     - bool
+     - ``false``
+     - Hortonian-inspired fast-bypass fraction. A fixed fraction
+       (``direct_runoff_fraction`` in ``general``) of positive daily
+       recharge bypasses the reservoir cascade entirely. Conceptually
+       motivated by infiltration-excess overland flow, but not a
+       rigorous physical representation at the daily timestep -- except
+       in extreme events where intense rainfall dominates the daily
+       total.
+
+Example:
+
+.. code-block:: yaml
+
+    modules:
+        snowpack:      true
+        frozen_ground: true
+        rain_on_snow:  true
+        direct_runoff: false  # off by default; enable for impervious or compacted-soil catchments
+
+When a module is disabled, its associated parameter (e.g.
+``PDD_melt_factor`` when ``snowpack: false``) has no effect and need not
+be calibrated.
+
 Complete Example
 ~~~~~~~~~~~~~~~~
 
