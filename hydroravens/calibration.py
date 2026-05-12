@@ -82,6 +82,7 @@ CalibResult = namedtuple('CalibResult', [
     'aic',          # float: AIC on log-transformed flows (lower is better)
     'bfi_obs',      # float: observed baseflow index
     'bfi_mod',      # float: modelled baseflow index
+    'kge_logfdc',   # float: KGE on log-transformed FDC ordinates
     'fdc_obs',      # pd.Series: observed flow at exceedance probabilities
     'fdc_mod',      # pd.Series: modelled flow at exceedance probabilities
     'final_states', # dict: {'reservoirs': [...], 'snowpack': float, 'fgi': float}
@@ -557,7 +558,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     nan_result = CalibResult(
         score=np.nan, aic=np.nan,
-        bfi_obs=np.nan, bfi_mod=np.nan,
+        bfi_obs=np.nan, bfi_mod=np.nan, kge_logfdc=np.nan,
         fdc_obs=pd.Series(dtype=float), fdc_mod=pd.Series(dtype=float),
         final_states=final_states, buckets=b,
     )
@@ -572,6 +573,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         aic          = _aic(m, o, k),
         bfi_obs      = _eckhardt_bfi(o),
         bfi_mod      = _eckhardt_bfi(m),
+        kge_logfdc   = _kge_logfdc(m, o),
         fdc_obs      = _fdc(o),
         fdc_mod      = _fdc(m),
         final_states = final_states,
