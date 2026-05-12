@@ -509,15 +509,18 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         k += 1
 
     if modules is not None:
-        _MATTR = {'snowpack':      'use_snowpack',
-                  'frozen_ground': 'use_frozen_ground',
-                  'rain_on_snow':  'use_rain_on_snow',
-                  'direct_runoff': 'use_direct_runoff'}
+        _MATTR = {'snowpack':       'use_snowpack',
+                  'frozen_ground':  'use_frozen_ground',
+                  'rain_on_snow':   'use_rain_on_snow',
+                  'direct_runoff':  'use_direct_runoff',
+                  'dtr_fgi_decay':  'use_dtr_fgi_decay'}
         for mod, val in modules.items():
             if mod in _MATTR:
                 setattr(b, _MATTR[mod], val)
         if not b.use_snowpack:
             b.has_snowpack = False
+        if not b.use_dtr_fgi_decay:
+            b._has_trange = False
 
     if routing_K is not None:
         k += 1

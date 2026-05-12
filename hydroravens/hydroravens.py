@@ -509,6 +509,7 @@ class Buckets(object):
         self.use_frozen_ground = _modules.get('frozen_ground', True)
         self.use_rain_on_snow  = _modules.get('rain_on_snow',  True)
         self.use_direct_runoff = _modules.get('direct_runoff', False)
+        self.use_dtr_fgi_decay = _modules.get('dtr_fgi_decay', True)
 
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
@@ -516,7 +517,8 @@ class Buckets(object):
                              'Mean Temperature [C]' in self.hydrodata.columns)
 
         # Detect optional daily T_min / T_max for DTR-based FGI decay.
-        self._has_trange = ('Minimum Temperature [C]' in self.hydrodata.columns and
+        self._has_trange = (self.use_dtr_fgi_decay and
+                            'Minimum Temperature [C]' in self.hydrodata.columns and
                             'Maximum Temperature [C]' in self.hydrodata.columns)
         if self.has_snowpack:
             # Instantiate snowpack
