@@ -513,6 +513,10 @@ class Buckets(object):
         # If not, note that no snowpack processes will be included
         self.has_snowpack = (self.use_snowpack and
                              'Mean Temperature [C]' in self.hydrodata.columns)
+
+        # Detect optional daily T_min / T_max for DTR-based FGI decay.
+        self._has_trange = ('Minimum Temperature [C]' in self.hydrodata.columns and
+                            'Maximum Temperature [C]' in self.hydrodata.columns)
         if self.has_snowpack:
             # Instantiate snowpack
             self.snowpack = Snowpack(self.melt_factor)  # allow changes to melt factor later
@@ -718,20 +722,31 @@ class Buckets(object):
         """
         Update the frozen ground index; flag top reservoir as frozen if needed.
 
-        FGI(t) = max(0, A · FGI(t-1) - T_eff - excess_dd)
-          A     = fgi_decay_coeff (default 0.97; Molnau & Bissell 1983)
+        FGI(t) = max(0, A_t · FGI(t-1) - T_eff - excess_dd)
+          A_t   = daily FGI decay coefficient (climate-dependent; see below)
           T_eff = T_mean · exp(-snow_insulation_k · SWE)
           T_mean < 0  → FGI rises  (freezing degree-days accumulate)
           T_mean > 0  → FGI falls  (warm air thaws)
-          A < 1 provides a passive daily decay that prevents indefinite
-          accumulation during long cold spells and sets a finite
-          steady-state: FGI* = |T| / (1 - A) for sustained temperature T.
-          Snow insulation damps both directions: deep snowpack buffers
-          the soil from cold air (reduces freezing) and from warm air
-          (slows spring thaw). excess_dd is not insulation-scaled because
-          meltwater delivers heat directly to the soil surface.
           excess_dd   → additional thaw credited from leftover snowmelt
                         energy [°C·day] = leftover mm SWE / melt_factor
+
+        DTR-based decay (when Minimum/Maximum Temperature columns present):
+          On days entirely below freezing (T_max ≤ 0), A_t = 1.0 — no
+          sub-daily thawing, FGI accumulates unimpeded. When the diurnal
+          cycle straddles 0°C (T_min < 0 < T_max), a fraction of the day
+          is above freezing and drives partial thawing:
+
+              f_above = T_max / (T_max - T_min)   [linear diurnal cycle]
+              A_t     = 1 - (1 - fgi_decay_coeff) · f_above
+
+          When f_above → 1, A_t → fgi_decay_coeff (M&B 0.97 maximum decay).
+          When f_above = 0, A_t = 1.0 (no passive decay).
+          This naturally gives near-unity A for continental climates (where
+          T_max rarely crosses 0 during cold spells) and M&B-like decay for
+          maritime climates with frequent freeze-thaw oscillations.
+
+        Fallback (T_min / T_max absent): A_t = fgi_decay_coeff (constant,
+          original M&B behaviour).
 
         When FGI exceeds fdd_threshold, the top reservoir's f_to_discharge
         is set to 1.0 so all drainage becomes direct runoff, simulating
@@ -780,7 +795,20 @@ class Buckets(object):
             )
         T     = self.hydrodata['Mean Temperature [C]'][time_step]
         T_eff = T * np.exp(-self.snow_insulation_k * self.snowpack.Hwater)
-        self._fgi = max(0.0, self.fgi_decay_coeff * self._fgi - T_eff - excess_dd)
+
+        if self._has_trange:
+            T_max = self.hydrodata['Maximum Temperature [C]'][time_step]
+            T_min = self.hydrodata['Minimum Temperature [C]'][time_step]
+            DTR   = T_max - T_min
+            if DTR > 0 and T_max > 0:
+                f_above = min(1.0, T_max / DTR)
+                A_t = 1.0 - (1.0 - self.fgi_decay_coeff) * f_above
+            else:
+                A_t = 1.0  # entirely below freezing; no sub-daily thawing
+        else:
+            A_t = self.fgi_decay_coeff
+
+        self._fgi = max(0.0, A_t * self._fgi - T_eff - excess_dd)
         if self._fgi > self.fdd_threshold:
             self.reservoirs[0].f_to_discharge = 1.0
         return f0

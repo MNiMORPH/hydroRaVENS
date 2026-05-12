@@ -200,12 +200,17 @@ the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
      - Melt rate (mm SWE per °C per day)
    * - ``fgi_decay_coeff``
      - float
-     - Daily multiplicative decay applied to the FGI before the
-       temperature forcing is added:
-       :math:`\text{FGI}_t = A \cdot \text{FGI}_{t-1} - T_\text{eff}`.
-       Default ``0.97`` (3% passive decay per day), following Molnau &
-       Bissell (1983), LISFLOOD, and GSSHA. Prevents indefinite FGI
-       accumulation during long cold spells. Rarely needs changing.
+     - Maximum daily FGI decay rate :math:`A_0` (default ``0.97``,
+       Molnau & Bissell 1983). When ``Minimum Temperature [C]`` and
+       ``Maximum Temperature [C]`` are present in the input CSV, the
+       effective per-day coefficient :math:`A_t` is computed from the
+       diurnal temperature range: :math:`A_t = 1 - (1-A_0)\,f_{\text{above}}`,
+       where :math:`f_{\text{above}}` is the fraction of the day above
+       0°C (linear diurnal cycle). On all-below-zero days :math:`A_t = 1`
+       (no decay); on days that straddle 0°C, :math:`A_t` decreases toward
+       :math:`A_0`. This makes FGI accumulation persistent in continental
+       climates and decay-bounded in maritime ones. Without T_min/T_max,
+       falls back to constant :math:`A_0` (original M&B behaviour).
    * - ``snow_insulation_k``
      - float
      - Snow insulation decay constant (mm⁻¹ SWE). Scales effective air

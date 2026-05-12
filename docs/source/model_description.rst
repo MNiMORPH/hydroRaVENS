@@ -118,19 +118,54 @@ decays passively each day, and additionally decays during warm periods:
 
     \text{FGI}_t = \max\!\left(0,\ A \cdot \text{FGI}_{t-1} - T_{\text{eff},t} - D_t\right)
 
-where :math:`A` is the daily decay coefficient (``fgi_decay_coeff``,
-default 0.97 following Molnau & Bissell 1983 and all major
-implementations), :math:`T_{\text{eff},t} = T_t \cdot e^{-k \cdot
-\text{SWE}_t}` is the snow-insulation-adjusted temperature (°C; negative
-values increase FGI, positive values reduce it), and :math:`D_t` is an
-additional thaw credit described below. The passive decay :math:`(1 - A)
-\approx 3\%` per day prevents indefinite accumulation during long cold
-spells and sets a finite steady-state
-:math:`\text{FGI}^* = |T| / (1 - A)` for sustained temperature
-:math:`T < 0`. When :math:`\text{FGI}_t` exceeds ``fdd_threshold``, the
-top reservoir's exfiltration fraction is set to 1.0 so that all drainage
-becomes direct runoff, simulating frozen-soil blockage of deep
+where :math:`A_t` is the daily decay coefficient (see below),
+:math:`T_{\text{eff},t} = T_t \cdot e^{-k \cdot \text{SWE}_t}` is the
+snow-insulation-adjusted temperature (°C; negative values increase FGI,
+positive values reduce it), and :math:`D_t` is an additional thaw credit
+described below. When :math:`\text{FGI}_t` exceeds ``fdd_threshold``,
+the top reservoir's exfiltration fraction is set to 1.0 so that all
+drainage becomes direct runoff, simulating frozen-soil blockage of deep
 infiltration.
+
+**DTR-based decay coefficient** :math:`A_t`:
+  The decay coefficient :math:`A_t` represents sub-daily heat input to
+  frozen soil that is not resolved by the daily-mean temperature forcing.
+  Its dominant physical driver is the fraction of the day when air
+  temperature is above 0°C even though the daily mean is negative —
+  a process that is frequent in maritime climates (Pacific Northwest,
+  Atlantic Europe) and rare in continental ones (central North America,
+  Siberia).
+
+  When daily minimum and maximum temperature columns
+  (``Minimum Temperature [C]``, ``Maximum Temperature [C]``) are present
+  in the input CSV, :math:`A_t` is computed from the diurnal temperature
+  range (DTR):
+
+  .. math::
+
+      f_{\text{above}} = \frac{\max(0,\ T_{\max,t})}
+                              {T_{\max,t} - T_{\min,t}}
+
+      A_t = 1 - (1 - A_0)\,f_{\text{above}}
+
+  where :math:`A_0` is ``fgi_decay_coeff`` (default 0.97, M&B 1983) and
+  :math:`f_{\text{above}}` is the fraction of the day above 0°C under a
+  linear diurnal-cycle assumption. On days entirely below freezing
+  (:math:`T_{\max} \leq 0`), :math:`A_t = 1.0` — no passive decay;
+  FGI accumulates unimpeded. When the diurnal cycle straddles 0°C,
+  :math:`A_t` falls toward :math:`A_0`. This naturally produces
+  near-unity :math:`A` for continental winters (where :math:`T_{\max}`
+  rarely crosses 0°C during cold spells) and M&B-like decay for maritime
+  climates with frequent overnight freeze–daytime thaw cycles.
+
+  ``fgi_decay_coeff`` thus represents the *maximum* daily decay rate,
+  reached when the entire cold day oscillates across 0°C. The steady-state
+  :math:`\text{FGI}^* = |T| / (1 - A_t)` is now climate-dependent:
+  large (persistent frost) for continental conditions, bounded for
+  maritime ones.
+
+  If T_min/T_max are absent, :math:`A_t` falls back to the constant
+  ``fgi_decay_coeff`` (original M&B behaviour).
 
 **Coupling snowmelt and frozen-ground thaw via the melt factor:**
   The PDD melt factor :math:`\alpha` has units of mm SWE per °C·day,
