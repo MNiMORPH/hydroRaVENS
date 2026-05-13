@@ -567,7 +567,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         q_obs  = b.hydrodata['Specific Discharge [mm/day]'].dropna()
         mean_q = float(q_obs.mean())
         if np.isfinite(mean_q) and mean_q > 0:
-            mean_q_eff = mean_q * (1.0 - b.direct_runoff_fraction)
+            mean_q_eff = (mean_q - b.baseflow_Q) * (1.0 - b.direct_runoff_fraction)
             for res, h in zip(b.reservoirs,
                               _steady_state_depths(b.reservoirs, mean_q_eff)):
                 res.Hwater = h
