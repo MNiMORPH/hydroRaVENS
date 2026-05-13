@@ -173,6 +173,13 @@ def _kge_logkge_logfdc_bfi(m, o):
             + bfi_score) / 4.0
 
 
+def _logkge_logfdc_bfi(m, o):
+    bfi_score = 1.0 - abs(_eckhardt_bfi(m) / _eckhardt_bfi(o) - 1.0)
+    return (  _log_kge(m, o)
+            + _kge_logfdc(m, o)
+            + bfi_score) / 3.0
+
+
 def _aic(m, o, k):
     eps        = 0.01 * o.mean()
     ss_res_log = np.sum((np.log(m + eps) - np.log(o + eps)) ** 2)
@@ -285,7 +292,8 @@ def _nash_cascade(q, N, K, dt=1.0):
 _METRICS = {'NSE': _nse, 'KGE': _kge, 'logKGE': _log_kge,
             'KGE_logKGE': _kge_logkge,
             'KGE_logKGE_logFDC': _kge_logkge_logfdc,
-            'KGE_logKGE_logFDC_BFI': _kge_logkge_logfdc_bfi}
+            'KGE_logKGE_logFDC_BFI': _kge_logkge_logfdc_bfi,
+            'logKGE_logFDC_BFI': _logkge_logfdc_bfi}
 
 
 def _steady_state_depths(reservoirs, mean_q):
