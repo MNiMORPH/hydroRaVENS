@@ -493,11 +493,22 @@ class Buckets(object):
         self.fgi_decay_coeff     = self.cfg['snowmelt'].get('fgi_decay_coeff',     0.97)
         self.et_method = self.cfg['catchment']['evapotranspiration_method']
         if self.et_method == 'ThorntwaiteChang2019' and not hasattr(self, 'Chang_I'):
-            raise ValueError(
-                'ThorntwaiteChang2019 requires long-term monthly temperature normals.\n'
-                'Pass T_monthly_normals (array of 12 monthly mean temperatures in °C)\n'
-                'to Buckets() before calling initialize().'
-            )
+            n_years = len(self.hydrodata) / 365.25
+            if n_years < 20:
+                warnings.warn(
+                    f"ThorntwaiteChang2019: monthly temperature normals were not provided "
+                    f"and will be computed from the {n_years:.1f}-year input record. "
+                    f"For short records this may not represent long-term climatology. "
+                    f"Pass T_monthly_normals to Buckets() for reliable results.",
+                    UserWarning, stacklevel=2,
+                )
+            T_normals = (self.hydrodata['Mean Temperature [C]']
+                             .groupby(pd.DatetimeIndex(self.hydrodata['Date']).month)
+                             .mean()
+                             .reindex(range(1, 13))
+                             .values)
+            self.Chang_I = self._compute_Chang_I(T_normals)
+            self.Chang_a = self._compute_Chang_a(self.Chang_I)
         self.water_year_start_month = self.cfg['catchment']['water_year_start_month']
         self.drainage_basin_area__km2 = self.cfg['catchment']['drainage_basin_area__km2']
         self.baseflow_Q = self.cfg['catchment'].get('baseflow_Q', 0.0)
@@ -690,8 +701,20 @@ class Buckets(object):
             self.hydrodata = self.hydrodata.merge(
                 self.hydrodata_WY_means['ET multiplier'],
                 on='Water Year')
+            nan_wy = (self.hydrodata_WY_means['ET multiplier']
+                          .index[self.hydrodata_WY_means['ET multiplier'].isna()]
+                          .tolist())
+            if nan_wy:
+                warnings.warn(
+                    f"ET multiplier is NaN for water year(s) {nan_wy} "
+                    f"(no discharge observations). Raw ET used for those years "
+                    f"(enforce_water_balance ineffective).",
+                    UserWarning, stacklevel=2,
+                )
+                self.hydrodata['ET multiplier'] = (
+                    self.hydrodata['ET multiplier'].fillna(1.0))
             self.hydrodata['ET for model [mm/day]'] = (
-                _raw_ET.to_numpy() * self.hydrodata['ET multiplier'].to_numpy())
+                np.asarray(_raw_ET) * self.hydrodata['ET multiplier'].to_numpy())
         else:
             self.hydrodata['ET for model [mm/day]'] = np.asarray(_raw_ET)
 
