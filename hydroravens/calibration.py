@@ -67,6 +67,8 @@ storage is physically continuous across decade boundaries.
 
 from collections import namedtuple
 
+import math
+
 import numpy as np
 import pandas as pd
 
@@ -353,7 +355,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
                   initial_states=None,
-                  start=None, end=None, spin_up_cycles=3,
+                  start=None, end=None, spin_up_cycles=None,
                   metric='KGE', routing_N=2, routing_K=None,
                   enforce_water_balance=True):
     """
@@ -424,10 +426,16 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         record.
     end : str or datetime-like, optional
         End of the scoring window (inclusive). Same as start.
-    spin_up_cycles : int, optional
+    spin_up_cycles : int or None, optional
         Number of times to loop the full record before the scored run.
-        Default is 3.  Set to 0 when providing initial_states for chained
-        decade runs.
+        ``None`` (default) auto-computes as
+        ``ceil(tau_max / record_length)``, where ``tau_max`` is the
+        longest reservoir e-folding time after parameter overrides and
+        ``record_length`` is the number of days in the input record.
+        Because initial conditions are set to analytical steady-state
+        depths, one e-folding time is sufficient to resolve the seasonal
+        and inter-annual climate memory.  Set to 0 when providing
+        initial_states for chained decade runs.
     metric : {'KGE', 'NSE', 'logKGE', 'KGE_logKGE', 'KGE_logKGE_logFDC', 'KGE_logKGE_logFDC_BFI'}, optional
         Goodness-of-fit metric.  Default is 'KGE'.
         ``'KGE_logKGE'`` returns 0.5*KGE + 0.5*logKGE, balancing
@@ -565,6 +573,9 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                 res.Hwater = h
 
     # --- Spin up on the full record with calibrated parameters ---
+    if spin_up_cycles is None:
+        tau_max = max(r.t_efold for r in b.reservoirs)
+        spin_up_cycles = math.ceil(tau_max / len(b.hydrodata))
     for _ in range(spin_up_cycles):
         b.run()
 
