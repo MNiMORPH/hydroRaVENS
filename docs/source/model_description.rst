@@ -58,6 +58,12 @@ their flag setting.
    * - ``direct_runoff``
      - off
      - Hortonian-inspired bypass fraction. See below.
+   * - ``dtr_fgi_decay``
+     - on
+     - DTR-based FGI decay. When T_min/T_max columns are present, the
+       per-day decay coefficient varies with the diurnal temperature
+       range. Disable to revert to constant ``fgi_decay_coeff``
+       (original Molnau & Bissell behaviour). See Frozen Ground Module.
 
 Snowpack Module (Optional)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -234,6 +240,30 @@ infiltration.
       :math:`k`, or for deep-snowpack alpine catchments where the
       insulation effect is large relative to the threshold uncertainty.
 
+Regional Groundwater Import (Optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``baseflow_Q > 0`` in the ``catchment`` configuration section, a
+constant daily flux (mm/day) is added to modeled discharge after all
+reservoir routing:
+
+.. math::
+
+    Q_{\text{out},t} = Q_{\text{routed},t} + Q_{\text{base}}
+
+This represents regional groundwater inflow from outside the surface
+catchment — for example, deep confined-aquifer discharge or inter-basin
+transfer that is decoupled from the local shallow water balance.
+:math:`Q_{\text{base}}` is not mass-balanced against precipitation or
+ET; it adds water to the stream without a corresponding source in the
+reservoir cascade.
+
+Use with care: ``baseflow_Q`` is most physically justified when
+independent hydrogeological evidence supports an external groundwater
+source (artesian springs, regional flow systems). Calibrating it from
+streamflow alone risks compensating for other structural deficiencies
+in the model.
+
 Direct Runoff Bypass (Optional)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -343,22 +373,60 @@ In both cases, the annual scaling factor is stored and applied to ensure that
 Model Skill Evaluation
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The **Nash-Sutcliffe Efficiency (NSE)** quantifies model performance:
+Several goodness-of-fit metrics are available via the ``metric`` argument
+of :func:`~hydroravens.calibration.run_and_score`.
+
+**Kling-Gupta Efficiency (KGE)** (Gupta et al. 2009):
+
+.. math::
+
+    \text{KGE} = 1 - \sqrt{(r-1)^2 + (\alpha-1)^2 + (\beta-1)^2}
+
+where :math:`r` is the Pearson correlation, :math:`\alpha = \sigma_m/\sigma_o`
+is the variability ratio, and :math:`\beta = \mu_m/\mu_o` is the bias ratio.
+KGE = 1 is perfect; KGE > 0.5 is generally considered satisfactory.
+
+**Log-space KGE (logKGE):** KGE computed on :math:`\log(Q + \epsilon)`,
+emphasising low-flow performance. :math:`\epsilon` is set to 1% of the
+mean observed discharge.
+
+**Nash-Sutcliffe Efficiency (NSE)**:
 
 .. math::
 
     \text{NSE} = 1 - \frac{\sum_t (Q_{\text{mod},t} - Q_{\text{obs},t})^2}
                           {\sum_t (Q_{\text{obs},t} - \bar{Q}_{\text{obs}})^2}
 
-* :math:`\text{NSE} = 1`: Perfect simulation
-* :math:`\text{NSE} = 0`: Model performs as well as the observed mean
-* :math:`\text{NSE} < 0`: Model worse than using the mean as a predictor
+NSE = 1 is perfect; NSE = 0 means the mean is as good as the model.
 
-**Typical ranges:**
-  * :math:`\text{NSE} > 0.75`: Excellent
-  * :math:`0.5 < \text{NSE} < 0.75`: Good
-  * :math:`0.3 < \text{NSE} < 0.5`: Satisfactory
-  * :math:`\text{NSE} < 0.3`: Poor
+**Available composite metrics:**
+
+.. list-table::
+   :widths: 35 65
+   :header-rows: 1
+
+   * - ``metric`` key
+     - Formula (equal weights)
+   * - ``KGE``
+     - :math:`\text{KGE}(Q, Q_{\text{obs}})`
+   * - ``NSE``
+     - :math:`\text{NSE}(Q, Q_{\text{obs}})`
+   * - ``logKGE``
+     - :math:`\text{KGE}(\log Q, \log Q_{\text{obs}})`
+   * - ``KGE_logKGE``
+     - :math:`\tfrac{1}{2}(\text{KGE} + \text{logKGE})`
+   * - ``KGE_logKGE_logFDC``
+     - :math:`\tfrac{1}{3}(\text{KGE} + \text{logKGE} + \text{KGE}_{\log\text{FDC}})`
+   * - ``KGE_logKGE_logFDC_BFI``
+     - :math:`\tfrac{1}{4}(\text{KGE} + \text{logKGE} + \text{KGE}_{\log\text{FDC}} + \text{BFI\_score})`
+   * - ``logKGE_logFDC_BFI``
+     - :math:`\tfrac{1}{3}(\text{logKGE} + \text{KGE}_{\log\text{FDC}} + \text{BFI\_score})`
+
+:math:`\text{KGE}_{\log\text{FDC}}` is KGE computed on the log-transformed
+flow-duration curve (sorted discharge). :math:`\text{BFI\_score} = 1 - |\text{BFI}_{\text{mod}}/\text{BFI}_{\text{obs}} - 1|`
+penalises baseflow bias using the Eckhardt (2005) digital filter
+(:math:`\alpha = 0.98`, :math:`\text{BFI}_{\max} = 0.80` for perennial streams).
+All composite scores are bounded above by 1.0.
 
 Model Assumptions & Limitations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

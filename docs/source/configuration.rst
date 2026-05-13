@@ -91,10 +91,32 @@ The ``catchment`` section
      - Basin area (km²); used for discharge-to-depth conversion
    * - ``evapotranspiration_method``
      - string
-     - ``datafile`` or ``ThorntwaiteChang2019``
+     - ``datafile`` or ``ThorntwaiteChang2019``. See note below.
    * - ``water_year_start_month``
      - int
      - Month (1–12) when water year begins (10 = October for USGS)
+   * - ``baseflow_Q``
+     - float
+     - Constant regional groundwater import (mm/day). Added to modeled
+       discharge after routing; not mass-balanced against P or ET.
+       Default ``0.0`` (disabled). Use only when independent
+       hydrogeological evidence supports an external groundwater source.
+
+.. note::
+
+    ``ThorntwaiteChang2019`` requires long-term monthly temperature
+    normals to compute the Thornthwaite heat index :math:`I` and
+    exponent :math:`a`. If normals are not supplied via
+    ``T_monthly_normals`` in the :class:`~hydroravens.Buckets`
+    constructor, they are computed automatically from the mean monthly
+    temperatures in the input record. A ``UserWarning`` is raised when
+    the record is shorter than 20 years, as a short period may not
+    represent long-term climatology. For best results, supply normals
+    from a 30-year reference period (e.g. WMO 1991–2020 normals).
+
+    Water years with no discharge observations receive an ET multiplier
+    of 1.0 (raw ET, no water-balance correction) with a ``UserWarning``
+    naming the affected years.
 
 Example:
 
@@ -104,6 +126,7 @@ Example:
         drainage_basin_area__km2: 3800
         evapotranspiration_method: datafile
         water_year_start_month: 10
+        baseflow_Q: 0.0   # disabled; set > 0 for regional groundwater import
 
 The ``general`` section
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -116,9 +139,15 @@ The ``general`` section
      - Type
      - Description
    * - ``spin_up_cycles``
-     - int
+     - int or ``null``
      - Number of complete passes through data before the main run. Use 0 to
-       skip spin-up.
+       skip spin-up (e.g. when supplying ``initial_states`` for chained
+       decade runs). ``null`` (or omitting the key when calling
+       :func:`~hydroravens.calibration.run_and_score`) triggers automatic
+       calculation: ``ceil(τ_max / record_length)``, where ``τ_max`` is the
+       longest reservoir e-folding time. Because initial conditions are set
+       to analytical steady-state depths, one e-folding time is sufficient
+       to resolve seasonal and inter-annual climate memory.
    * - ``enforce_water_balance``
      - bool
      - Scale ET by a per-water-year multiplier so that P − Q − ET = 0 over
@@ -269,12 +298,21 @@ absent.
      - bool
      - ``false``
      - Hortonian-inspired fast-bypass fraction. A fixed fraction
-       (``direct_runoff_fraction`` in ``general``) of positive daily
-       recharge bypasses the reservoir cascade entirely. Conceptually
-       motivated by infiltration-excess overland flow, but not a
-       rigorous physical representation at the daily timestep -- except
-       in extreme events where intense rainfall dominates the daily
-       total.
+       (``f_direct_runoff``) of positive daily recharge bypasses the
+       reservoir cascade entirely. Conceptually motivated by
+       infiltration-excess overland flow, but not a rigorous physical
+       representation at the daily timestep.
+   * - ``dtr_fgi_decay``
+     - bool
+     - ``true``
+     - DTR-based FGI decay coefficient. When enabled and
+       ``Minimum Temperature [C]`` / ``Maximum Temperature [C]``
+       columns are present, the per-day FGI decay coefficient
+       :math:`A_t` varies with the diurnal temperature range rather
+       than being held constant at ``fgi_decay_coeff``. Disable to
+       revert to constant :math:`A_0` (original Molnau & Bissell
+       1983 behaviour). Has no effect when T_min/T_max columns are
+       absent or when ``frozen_ground: false``.
 
 Example:
 
@@ -284,7 +322,8 @@ Example:
         snowpack:      true
         frozen_ground: true
         rain_on_snow:  true
-        direct_runoff: false  # off by default; enable for impervious or compacted-soil catchments
+        direct_runoff: false   # off by default
+        dtr_fgi_decay: true    # on by default; disable for continental climates with A=1
 
 When a module is disabled, its associated parameter (e.g.
 ``PDD_melt_factor`` when ``snowpack: false``) has no effect and need not
@@ -304,20 +343,29 @@ Complete Example
 
     catchment:
         drainage_basin_area__km2: 3800
-        evapotranspiration_method: ThorntwaiteChang2019  # requires T_monthly_normals in Python
+        evapotranspiration_method: ThorntwaiteChang2019  # normals auto-computed if not supplied
         water_year_start_month: 10
+        baseflow_Q: 0.0   # mm/day regional groundwater import; 0 = disabled
 
     general:
-        spin_up_cycles: 1
+        spin_up_cycles: null  # auto: ceil(tau_max / record_length)
 
     reservoirs:
         e_folding_residence_times__days: [16, 2000]
         exfiltration_fractions: [0.8, 1.0]
         maximum_effective_depths__mm: [.inf, .inf]
-    
+
     snowmelt:
         PDD_melt_factor: 1.0
         fgi_decay_coeff: 0.97       # default; Molnau & Bissell (1983)
+        snow_insulation_k: 0.0      # mm⁻¹ SWE; 0 = disabled
+
+    modules:
+        snowpack:      true
+        frozen_ground: true
+        rain_on_snow:  true
+        direct_runoff: false
+        dtr_fgi_decay: true
 
 Illustrative Starting Points
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

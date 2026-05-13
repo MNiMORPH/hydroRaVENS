@@ -849,13 +849,6 @@ class Buckets(object):
         subsurface storage in self.hydrodata for the current time step.
         Part of the CSDMS Basic Model Interface.
 
-        NOTE FALLACY: recharging before discharging,
-        even though during the same time step.
-        Consider changing to use half-recharge from each time step.
-
-        FOR LATER: , dt_at_timestep=self.dt
-        FOR SOONER: WATER-YEAR BALANCE
-
         Parameters
         ----------
         time_step : int, optional
