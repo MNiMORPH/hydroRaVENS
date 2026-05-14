@@ -576,11 +576,12 @@ class Buckets(object):
         # Module enable/disable flags — read from config, default to on
         # (except direct_runoff, which defaults to off).
         _modules = self.cfg.get('modules', {})
-        self.use_snowpack      = _modules.get('snowpack',      True)
-        self.use_frozen_ground = _modules.get('frozen_ground', True)
-        self.use_rain_on_snow  = _modules.get('rain_on_snow',  True)
-        self.use_direct_runoff = _modules.get('direct_runoff', False)
-        self.use_dtr_fgi_decay = _modules.get('dtr_fgi_decay', True)
+        self.use_snowpack        = _modules.get('snowpack',        True)
+        self.use_frozen_ground   = _modules.get('frozen_ground',   True)
+        self.use_rain_on_snow    = _modules.get('rain_on_snow',    True)
+        self.use_direct_runoff   = _modules.get('direct_runoff',   False)
+        self.use_dtr_fgi_decay   = _modules.get('dtr_fgi_decay',   True)
+        self.use_et_water_stress = _modules.get('et_water_stress', False)
 
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
@@ -778,6 +779,25 @@ class Buckets(object):
         else:
             self.hydrodata['ET for model [mm/day]'] = np.asarray(_raw_ET)
 
+    def _et_stress_factor(self):
+        """
+        Water-availability multiplier applied to potential ET each time step.
+
+        Returns 1 - exp(-H_shallow / H0), where H_shallow is the current water
+        depth in the shallowest reservoir and H0 is its PDM characteristic
+        storage depth (pdm_H0).  The multiplier is zero when the reservoir is
+        empty and approaches 1 as it fills, so actual ET = potential ET * factor.
+
+        Returns 1.0 (no stress) when et_water_stress is disabled or when the
+        shallow reservoir has no pdm_H0 set.
+        """
+        if not self.use_et_water_stress:
+            return 1.0
+        H0 = self.reservoirs[0].pdm_H0
+        if H0 is None:
+            return 1.0
+        return 1.0 - np.exp(-max(self.reservoirs[0].Hwater, 0.0) / H0)
+
     def _compute_snowpack(self, time_step):
         """
         Update the snowpack for one timestep; return excess melt energy.
@@ -797,6 +817,7 @@ class Buckets(object):
         self.snowpack.set_temperature(T)
         self.snowpack.recharge(
             P - self.hydrodata['ET for model [mm/day]'][time_step]
+            * self._et_stress_factor()
             + self.H_deficit_carry
         )
         excess_dd = self.snowpack.melt(self.dt,
@@ -935,7 +956,8 @@ class Buckets(object):
                 else:
                     _recharge = (
                         self.hydrodata['Precipitation [mm/day]'][time_step] -
-                        self.hydrodata['ET for model [mm/day]'][time_step] +
+                        self.hydrodata['ET for model [mm/day]'][time_step]
+                        * self._et_stress_factor() +
                         self.H_deficit_carry)
                 # Hortonian-inspired bypass: fraction exits without entering reservoirs.
                 _q_direct = (max(0.0, _recharge) * self.direct_runoff_fraction
