@@ -582,6 +582,7 @@ class Buckets(object):
         self.use_direct_runoff   = _modules.get('direct_runoff',   False)
         self.use_dtr_fgi_decay   = _modules.get('dtr_fgi_decay',   True)
         self.use_et_water_stress = _modules.get('et_water_stress', False)
+        self.et_scale = 1.0   # global ET multiplier; calibrated when et_water_stress is on
 
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
@@ -740,10 +741,16 @@ class Buckets(object):
         Build the ET time series used in the model.
 
         Obtains raw daily ET from the input data file or the Thornthwaite–Chang
-        2019 equation (see evapotranspiration_Chang2019()). When enforce_water_balance is
-        True (the default), raw ET is multiplied by the per-water-year
-        multiplier from compute_ET_multiplier() so that P - Q - ET = 0 over
-        each water year. When enforce_water_balance is False, raw ET is used directly.
+        2019 equation (see evapotranspiration_Chang2019()). Three modes:
+
+        1. et_water_stress=True: multiply raw ET by self.et_scale (a single
+           global calibration parameter, analogous to PDD_melt_factor for snow).
+           The per-water-year water-balance multiplier is bypassed because the
+           dynamic stress factor applied in _et_stress_factor() at each time step
+           would make the pre-computed per-year correction inconsistent.
+        2. enforce_water_balance=True (default, stress off): raw ET is multiplied
+           by a per-water-year multiplier so that P - Q - ET = 0 each water year.
+        3. enforce_water_balance=False (stress off): raw ET is used directly.
 
         The result is stored as 'ET for model [mm/day]' in self.hydrodata.
         """
@@ -755,7 +762,13 @@ class Buckets(object):
             raise ValueError('evapotranspiration_method must be "datafile" or '+
                              '"ThorntwaiteChang2019".')
 
-        if self.enforce_water_balance:
+        if self.use_et_water_stress:
+            # Dynamic stress couples ET to reservoir state at each step;
+            # per-year water-balance enforcement is incompatible with that.
+            # Use a single calibrated global scale factor instead.
+            self.hydrodata['ET for model [mm/day]'] = (
+                np.asarray(_raw_ET) * self.et_scale)
+        elif self.enforce_water_balance:
             # Merge per-water-year multiplier into hydrodata, then apply.
             # Use .to_numpy() to multiply by position rather than pandas index
             # so that any index reset from the merge cannot silently misalign rows.

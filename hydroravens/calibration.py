@@ -354,6 +354,7 @@ def _steady_state_depths(reservoirs, mean_q):
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   pdm_H0=None, f_tile=None, tau_tile=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
+                  et_scale=None,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
                   initial_states=None,
@@ -498,6 +499,27 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     b = Buckets()
     b.initialize(cfg, enforce_water_balance=enforce_water_balance)
 
+    # --- Module flag overrides (must precede parameter overrides that depend on them) ---
+    if modules is not None:
+        _MATTR = {'snowpack':         'use_snowpack',
+                  'frozen_ground':    'use_frozen_ground',
+                  'rain_on_snow':     'use_rain_on_snow',
+                  'direct_runoff':    'use_direct_runoff',
+                  'dtr_fgi_decay':    'use_dtr_fgi_decay',
+                  'et_water_stress':  'use_et_water_stress'}
+        for mod, val in modules.items():
+            if mod in _MATTR:
+                setattr(b, _MATTR[mod], val)
+        if not b.use_snowpack:
+            b.has_snowpack = False
+        if not b.use_dtr_fgi_decay:
+            b._has_trange = False
+        if b.use_et_water_stress:
+            # Rebuild ET column in the correct mode (global scale, no per-year
+            # multiplier). et_scale is still 1.0 here; it will be overridden
+            # and compute_ET() re-called below if et_scale is provided.
+            b.compute_ET()
+
     # --- Parameter overrides and free-parameter count ---
     k = 0
 
@@ -535,6 +557,11 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         if any_tile:
             k += 1  # tau_tile counted once across all tiled reservoirs
 
+    if et_scale is not None and b.use_et_water_stress:
+        b.et_scale = et_scale
+        b.compute_ET()   # re-build 'ET for model' column with new scale
+        k += 1
+
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor
         b.melt_factor = melt_factor  # keep Buckets-level attribute in sync
@@ -555,20 +582,6 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if baseflow_Q is not None:
         b.baseflow_Q = baseflow_Q
         k += 1
-
-    if modules is not None:
-        _MATTR = {'snowpack':       'use_snowpack',
-                  'frozen_ground':  'use_frozen_ground',
-                  'rain_on_snow':   'use_rain_on_snow',
-                  'direct_runoff':  'use_direct_runoff',
-                  'dtr_fgi_decay':  'use_dtr_fgi_decay'}
-        for mod, val in modules.items():
-            if mod in _MATTR:
-                setattr(b, _MATTR[mod], val)
-        if not b.use_snowpack:
-            b.has_snowpack = False
-        if not b.use_dtr_fgi_decay:
-            b._has_trange = False
 
     if routing_K is not None:
         k += 1
