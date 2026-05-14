@@ -351,6 +351,7 @@ def _steady_state_depths(reservoirs, mean_q):
 # ---------------------------------------------------------------------------
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
+                  pdm_H0=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
@@ -513,6 +514,12 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         for i, val in enumerate(Hmax):
             b.reservoirs[i].Hmax = val
         k += len(Hmax)
+
+    if pdm_H0 is not None:
+        for i, val in enumerate(pdm_H0):
+            if val is not None:
+                b.reservoirs[i].pdm_H0 = val
+        k += sum(1 for v in pdm_H0 if v is not None)
 
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor

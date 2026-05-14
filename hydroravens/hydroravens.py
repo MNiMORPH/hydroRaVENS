@@ -38,7 +38,8 @@ class Reservoir(object):
     proportional to the amount of water held in the reservoir.
     """
 
-    def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf, H0=0.):
+    def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf, pdm_H0=None,
+                 H0=0.):
         """
         Initialize a linear reservoir.
 
@@ -53,16 +54,26 @@ class Reservoir(object):
             the next-deeper reservoir. Default 1.0 (all to discharge).
         Hmax : float, optional
             Maximum water depth the reservoir can hold. Default np.inf.
+        pdm_H0 : float or None, optional
+            Characteristic storage depth [mm] for the probability-distributed
+            model (PDM) of saturation-excess overland flow.  Storage capacity
+            is assumed exponentially distributed across the catchment with
+            mean pdm_H0; the saturated fraction when reservoir depth is H is
+            f_sat = 1 - exp(-H / pdm_H0).  That fraction of each positive
+            recharge pulse is shed immediately as overland flow.  Mutually
+            exclusive with a finite Hmax.  Default None (PDM off).
         H0 : float, optional
             Initial water depth at the start of the simulation. Default 0.
 
         Raises
         ------
         ValueError
-            If t_efold <= 0, f_to_discharge < 0 or > 1, or Hmax < 0.
+            If t_efold <= 0, f_to_discharge < 0 or > 1, Hmax < 0, or
+            pdm_H0 <= 0.
         """
         self.Hwater = H0
         self.Hmax = Hmax
+        self.pdm_H0 = pdm_H0
         self.t_efold = t_efold
         self.f_to_discharge = f_to_discharge
 
@@ -87,6 +98,8 @@ class Reservoir(object):
                           "redundant pass-through water-storage layer")
         if Hmax < 0:
             raise ValueError("Hmax must be >= 0 (and >0 makes more sense)")
+        if pdm_H0 is not None and pdm_H0 <= 0:
+            raise ValueError("pdm_H0 must be > 0")
 
     def recharge(self, H):
         """
@@ -116,6 +129,14 @@ class Reservoir(object):
         # this check later
         if self.Hwater < 0:
             raise ValueError("Hwater in reservoir < 0; non-physical")
+
+        # PDM: exponential distribution of storage capacities.
+        # Saturated fraction of catchment sheds positive recharge immediately
+        # as saturation-excess overland flow before the remainder enters storage.
+        if self.pdm_H0 is not None and H > 0:
+            f_sat = 1.0 - np.exp(-self.Hwater / self.pdm_H0)
+            self.H_excess = f_sat * H
+            H = (1.0 - f_sat) * H
 
         # What if more water is lost during "recharge" than exists in reservoir?
         # Create a deficit and bring Hwater to 0
@@ -470,12 +491,15 @@ class Buckets(object):
             self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'])
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
+        _pdm_H0 = self.cfg['reservoirs'].get('pdm_H0__mm',
+                                              [None] * self.n_reservoirs)
         self.reservoirs = [
             Reservoir(
-                t_efold = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
+                t_efold        = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
                 f_to_discharge = self.cfg['reservoirs']['exfiltration_fractions'][i],
-                Hmax = self.cfg['reservoirs']['maximum_effective_depths__mm'][i],
-                H0   = self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'][i],
+                Hmax           = self.cfg['reservoirs']['maximum_effective_depths__mm'][i],
+                pdm_H0         = _pdm_H0[i],
+                H0             = self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'][i],
             )
             for i in range(self.n_reservoirs)]
 
