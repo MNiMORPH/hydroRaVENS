@@ -72,7 +72,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from .hydroravens import Buckets
+from .hydroravens import Buckets, Reservoir
 
 
 # ---------------------------------------------------------------------------
@@ -342,7 +342,8 @@ def _steady_state_depths(reservoirs, mean_q):
     for res in reservoirs:
         H_eq = q_in / (np.exp(1.0 / res.t_efold) - 1.0)
         depths.append(min(H_eq, res.Hmax))
-        q_in *= (1.0 - res.f_to_discharge)
+        # Tile drainage reduces the recharge reaching the next reservoir.
+        q_in *= (1.0 - res.f_to_discharge) * (1.0 - res.f_tile)
     return depths
 
 
@@ -351,7 +352,7 @@ def _steady_state_depths(reservoirs, mean_q):
 # ---------------------------------------------------------------------------
 
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
-                  pdm_H0=None,
+                  pdm_H0=None, f_tile=None, tau_tile=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
@@ -520,6 +521,19 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
             if val is not None:
                 b.reservoirs[i].pdm_H0 = val
         k += sum(1 for v in pdm_H0 if v is not None)
+
+    if f_tile is not None:
+        any_tile = False
+        for i, ft in enumerate(f_tile[:len(b.reservoirs)]):
+            b.reservoirs[i].f_tile = ft
+            if ft > 0.0 and tau_tile is not None:
+                b.reservoirs[i].tile_res = Reservoir(tau_tile, f_to_discharge=1.0)
+                any_tile = True
+            else:
+                b.reservoirs[i].tile_res = None
+        k += sum(1 for ft in f_tile if ft > 0.0)
+        if any_tile:
+            k += 1  # tau_tile counted once across all tiled reservoirs
 
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor

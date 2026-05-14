@@ -39,7 +39,7 @@ class Reservoir(object):
     """
 
     def __init__(self, t_efold, f_to_discharge=1., Hmax=np.inf, pdm_H0=None,
-                 H0=0.):
+                 H0=0., f_tile=0.0, tau_tile=None):
         """
         Initialize a linear reservoir.
 
@@ -64,12 +64,23 @@ class Reservoir(object):
             exclusive with a finite Hmax.  Default None (PDM off).
         H0 : float, optional
             Initial water depth at the start of the simulation. Default 0.
+        f_tile : float, optional
+            Fraction of subsurface drainage (H_infiltrated) that is diverted
+            to a fast tile-drain sub-reservoir instead of passing to the
+            next-deeper reservoir.  The tile sub-reservoir drains directly to
+            stream with e-folding time tau_tile.  Represents agricultural
+            tile drainage or any fast lateral subsurface path.  Default 0
+            (no tile drainage).  Requires tau_tile when > 0.
+        tau_tile : float or None, optional
+            E-folding residence time [days] of the tile-drain sub-reservoir.
+            Typical values: 3–21 days for agricultural tile systems.  Required
+            when f_tile > 0; ignored when f_tile == 0.  Default None.
 
         Raises
         ------
         ValueError
-            If t_efold <= 0, f_to_discharge < 0 or > 1, Hmax < 0, or
-            pdm_H0 <= 0.
+            If t_efold <= 0, f_to_discharge < 0 or > 1, Hmax < 0,
+            pdm_H0 <= 0, f_tile < 0 or > 1, or f_tile > 0 with no tau_tile.
         """
         self.Hwater = H0
         self.Hmax = Hmax
@@ -100,6 +111,16 @@ class Reservoir(object):
             raise ValueError("Hmax must be >= 0 (and >0 makes more sense)")
         if pdm_H0 is not None and pdm_H0 <= 0:
             raise ValueError("pdm_H0 must be > 0")
+        if f_tile < 0 or f_tile > 1:
+            raise ValueError("f_tile must be in [0, 1]")
+        if f_tile > 0 and tau_tile is None:
+            raise ValueError("tau_tile must be provided when f_tile > 0")
+
+        self.f_tile = f_tile
+        if f_tile > 0.0 and tau_tile is not None:
+            self.tile_res = Reservoir(tau_tile, f_to_discharge=1.0)
+        else:
+            self.tile_res = None
 
     def recharge(self, H):
         """
@@ -172,6 +193,15 @@ class Reservoir(object):
         self.H_discharge = self.H_excess + self.H_exfiltrated
         self.H_infiltrated = dH * (1 - self.f_to_discharge)
         self.Hwater -= dH
+
+        # Tile drainage: divert f_tile of H_infiltrated to the fast sub-reservoir.
+        # The remainder continues to the next-deeper reservoir as normal.
+        if self.tile_res is not None:
+            tile_in = self.f_tile * self.H_infiltrated
+            self.H_infiltrated -= tile_in
+            self.tile_res.recharge(tile_in)
+            self.tile_res.discharge(dt)
+            self.H_discharge += self.tile_res.H_discharge
 
 
 class Snowpack(object):
@@ -491,8 +521,12 @@ class Buckets(object):
             self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'])
         # Using this, we will build a list of reservoir objects
         # and initialize them based on the provided inputs
-        _pdm_H0 = self.cfg['reservoirs'].get('pdm_H0__mm',
-                                              [None] * self.n_reservoirs)
+        _pdm_H0   = self.cfg['reservoirs'].get('pdm_H0__mm',
+                                               [None]  * self.n_reservoirs)
+        _f_tile   = self.cfg['reservoirs'].get('tile_fractions',
+                                               [0.0]   * self.n_reservoirs)
+        _tau_tile = self.cfg['reservoirs'].get('tile_residence_times__days',
+                                               [None]  * self.n_reservoirs)
         self.reservoirs = [
             Reservoir(
                 t_efold        = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
@@ -500,6 +534,8 @@ class Buckets(object):
                 Hmax           = self.cfg['reservoirs']['maximum_effective_depths__mm'][i],
                 pdm_H0         = _pdm_H0[i],
                 H0             = self.cfg['initial_conditions']['water_reservoir_effective_depths__mm'][i],
+                f_tile         = _f_tile[i],
+                tau_tile       = _tau_tile[i],
             )
             for i in range(self.n_reservoirs)]
 
@@ -933,7 +969,9 @@ class Buckets(object):
         if self.has_snowpack:
             self.hydrodata.at[time_step, 'Snowpack (modeled) [mm SWE]'] = self.snowpack.Hwater
         self.hydrodata.at[time_step, 'Subsurface storage (modeled total) [mm]'] = (
-            np.sum([res.Hwater for res in self.reservoirs]))
+            np.sum([res.Hwater for res in self.reservoirs])
+            + np.sum([res.tile_res.Hwater for res in self.reservoirs
+                      if res.tile_res is not None]))
 
     def evapotranspiration_Chang2019(self, Tmax=None, Tmin=None, photoperiod=None,
                                     k=0.69):
