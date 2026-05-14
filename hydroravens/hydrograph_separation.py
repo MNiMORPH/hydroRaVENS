@@ -122,6 +122,8 @@ class HydrographSeparation:
         self._Q_components_fast  = None   # list of fast-component time series
         self._psd_freqs          = None
         self._psd                = None
+        self._tau_shallow_td     = None   # time-domain τ_shallow estimate
+        self._tau_soil_td        = None   # time-domain τ_soil estimate
 
     # ------------------------------------------------------------------
     # Public interface
@@ -131,6 +133,7 @@ class HydrographSeparation:
         """Run the full separation pipeline. Returns self."""
         self._compute_psd()
         self._fit_spectral_model()
+        self._fit_timescales_td()
         self._separate_components()
         self._fit_recession()
         self._compute_initial_conditions()
@@ -169,6 +172,9 @@ class HydrographSeparation:
         tau_fast_to_slow = self.tau[::-1]   # shallow first
         priors = {}
         for name, tau_i in zip(names[:len(tau_fast_to_slow)], tau_fast_to_slow):
+            if not np.isfinite(tau_i):
+                priors[name] = None   # could not be estimated; keep params.yml defaults
+                continue
             log_tau = np.log10(tau_i)
             priors[name] = {
                 'initial': round(float(log_tau),       3),
@@ -192,13 +198,268 @@ class HydrographSeparation:
         if self.aic_scores is not None:
             print(f'\n  AIC by fast-reservoir order: '
                   f'{[round(a, 1) for a in self.aic_scores]}')
+        print(f'\n  Time-domain estimates:')
+        td_sh = (f'{self._tau_shallow_td:.1f} d'
+                 if self._tau_shallow_td is not None else 'not estimated')
+        print(f'    τ_shallow : {td_sh}')
+        if self.n_reservoirs_fitted >= 3 or self._tau_soil_td is not None:
+            td_so = (f'{self._tau_soil_td:.1f} d'
+                     if self._tau_soil_td is not None
+                     else 'not estimated (insufficient long dry-period recessions)')
+            print(f'    τ_soil    : {td_so}')
         print(f'\n  τ_karst  (segment minima):  {self.tau_karst:.1f} days')
         if self.tau_karst_longterm is not None:
             print(f'  τ_karst  (long-term slope): {self.tau_karst_longterm:.1f} days'
                   f'  {"← agree" if abs(np.log(self.tau_karst / self.tau_karst_longterm)) < 0.5 else "← disagree — check interannual trend"}')
 
     # ------------------------------------------------------------------
-    # Stage 1: spectral fitting
+    # Stage 1a: time-domain τ estimation (primary for fast reservoirs)
+    # ------------------------------------------------------------------
+
+    def _fit_recession_scale(self, Q_signal, min_dur, smooth_days, antecedent_days,
+                              precip_threshold=None, min_tau=1.0, max_tau=None,
+                              mode='within'):
+        """
+        Estimate a recession timescale from recession-segment analysis.
+
+        Two modes:
+
+        ``'within'`` (default) — for fast/intermediate timescales:
+            Fit log(Q) vs relative time within each qualifying segment; take
+            the median slope.  Captures the LOCAL recession rate, which is
+            dominated by the fastest reservoir still active over that duration.
+            Use short segments (5-20 d) for τ_shallow; longer segments (30+ d)
+            on the shallow-filtered signal for τ_soil.
+
+        ``'cross'`` — for slow timescales (τ_karst):
+            Record the minimum Q within each segment and fit log(Q_min) vs
+            absolute time across all segments.  Captures the INTER-ANNUAL
+            drainage trend that persists after fast reservoirs empty.
+
+        Parameters
+        ----------
+        Q_signal : ndarray
+            Discharge signal to analyse [mm/day].
+        min_dur : int
+            Minimum qualifying segment length [days].
+        smooth_days : float
+            Moving-average window [days] for the declining test only.
+        antecedent_days : int
+            Days before segment start that must also satisfy the precipitation
+            gate.
+        precip_threshold : float or None
+            Precipitation gate [mm/day].  Defaults to
+            self.recession_precip_threshold.
+        min_tau : float
+            Reject fits with τ < min_tau [days].
+        max_tau : float or None
+            Reject fits with τ > max_tau [days].
+        mode : {'within', 'cross'}
+            Regression strategy (see above).
+
+        Returns
+        -------
+        tau : float or None
+            Estimated timescale [days], or None if fewer than three segments
+            qualify or the slope is non-negative.
+        n_segs : int
+            Number of qualifying segments used.
+        """
+        n         = len(Q_signal)
+        threshold = (precip_threshold if precip_threshold is not None
+                     else self.recession_precip_threshold)
+
+        # Smooth signal for declining test only
+        w = max(1, int(round(smooth_days / self.dt)))
+        if w > 1:
+            kernel   = np.ones(w) / w
+            Q_smooth = np.convolve(Q_signal, kernel, mode='same')
+        else:
+            Q_smooth = Q_signal.copy()
+        Q_smooth = np.maximum(Q_smooth, 0.0)
+
+        # Precipitation gate
+        if self.precip is not None:
+            dry = self.precip < threshold
+            for lag in range(1, antecedent_days + 1):
+                dry[lag:] &= dry[:-lag]
+        else:
+            dry = np.ones(n, dtype=bool)
+
+        # Declining test on smoothed signal
+        declining      = np.zeros(n, dtype=bool)
+        declining[:-1] = Q_smooth[1:] < Q_smooth[:-1]
+        candidate      = dry & declining
+
+        # Collect qualifying segments
+        mask = np.zeros(n, dtype=bool)
+        i    = 0
+        while i < n:
+            if candidate[i]:
+                j = i + 1
+                while j < n and candidate[j]:
+                    j += 1
+                if j - i >= min_dur:
+                    mask[i:j] = True
+                i = j
+            else:
+                i += 1
+
+        if not np.any(mask):
+            return None, 0
+
+        idx       = np.where(mask)[0]
+        breaks    = np.where(np.diff(idx) > 1)[0] + 1
+        segs      = np.split(idx, breaks)
+        min_valid = max(3, min_dur // 3)
+
+        if mode == 'within':
+            slopes = []
+            for seg in segs:
+                Q_seg = Q_signal[seg]
+                valid = Q_seg > 0
+                if valid.sum() < min_valid:
+                    continue
+                t_rel = np.arange(valid.sum()) * self.dt
+                s, _, _, _, _ = linregress(t_rel, np.log(Q_seg[valid]))
+                if s < -1e-12:
+                    slopes.append(s)
+            n_segs = len(slopes)
+            if n_segs < 3:
+                return None, n_segs
+            slope = float(np.median(slopes))
+
+        else:  # 'cross': per-segment minimum vs absolute time
+            t_min_list = []
+            Q_min_list = []
+            for seg in segs:
+                Q_seg = Q_signal[seg]
+                valid = Q_seg > 0
+                if valid.sum() < min_valid:
+                    continue
+                min_pos = np.argmin(Q_seg[valid])
+                abs_idx = seg[valid][min_pos]
+                t_min_list.append(abs_idx * self.dt)
+                Q_min_list.append(float(Q_seg[valid][min_pos]))
+            n_segs = len(t_min_list)
+            if n_segs < 3:
+                return None, n_segs
+            slope, _, _, _, _ = linregress(np.array(t_min_list),
+                                            np.log(np.array(Q_min_list)))
+
+        if slope >= -1e-12:
+            return None, n_segs
+
+        tau = -1.0 / slope
+        if tau < min_tau:
+            return None, n_segs
+        if max_tau is not None and tau > max_tau:
+            return None, n_segs
+
+        return tau, n_segs
+
+    def _fit_timescales_td(self):
+        """
+        Estimate fast-reservoir timescales via time-domain recession analysis
+        and update self._tau_spectral with the results.
+
+        Two stages of sequential peeling:
+
+        1. **τ_shallow** — per-segment minimum on raw Q with short (≥5 day)
+           segments and a 1-day smooth.  Accepts τ in [2, 200] days.
+
+        2. **τ_soil** — per-segment minimum on Q after removing the shallow
+           component (low-pass at τ_shallow).  Uses a moving-average window
+           equal to τ_shallow to suppress residual fast noise, a relaxed
+           precipitation threshold (2 mm/day — small rain barely recharges the
+           soil), and an antecedent window ≈ τ_shallow to wait for the shallow
+           reservoir to drain.  Only attempted when n_reservoirs ≥ 3.
+
+        Time-domain estimates replace the corresponding spectral values in
+        self._tau_spectral when available; spectral values serve as fallbacks
+        only if they are well-separated from the shallow scale (> 5×τ_shallow).
+        Diagnostic attributes _tau_shallow_td and _tau_soil_td are set
+        regardless of whether they replace spectral values.
+        """
+        if self.tau_fast is not None:
+            self._tau_shallow_td = None
+            self._tau_soil_td    = None
+            return
+
+        n_fast_target = (self.n_reservoirs - 1 if self.n_reservoirs is not None
+                         else self.max_reservoirs - 1)
+
+        # ---- τ_shallow -------------------------------------------------------
+        # Within-segment median slope on short (5-15 d) recession segments.
+        # Short segments capture the fast shallow reservoir; deeper reservoirs
+        # act as a near-constant baseline and barely affect the slope.
+        tau_sh, _ = self._fit_recession_scale(
+            self.Q,
+            min_dur=5,
+            smooth_days=1.0,
+            antecedent_days=self.recession_antecedent_days,
+            min_tau=2.0,
+            max_tau=200.0,
+            mode='within',
+        )
+        self._tau_shallow_td = tau_sh
+
+        # ---- τ_soil (only when ≥ 3 reservoirs expected) ---------------------
+        # Within-segment median slope on medium (≥ 20 d) recession segments of
+        # Q after removing the shallow component.  Key parameters:
+        #   smooth_days = τ_shallow: 23-day MA implicitly suppresses residual
+        #     shallow noise and acts as an antecedent filter without requiring
+        #     an equally long explicit antecedent window.
+        #   antecedent_days = 5: short because smoothing already handles lag.
+        #   precip_threshold = 2.0 mm/day: small events do not meaningfully
+        #     recharge the soil zone on 20-day timescales.
+        # Note: the fitted τ_soil reflects the combined soil+karst recession
+        # rate (since Q_slow = Q_soil + Q_karst), so it will typically be
+        # longer than the true τ_soil.  This overestimate is preferable to NaN.
+        self._tau_soil_td = None
+        if n_fast_target >= 2 and tau_sh is not None:
+            Q_slow = self._apply_lowpass(self.Q, tau_sh)
+            tau_so, _ = self._fit_recession_scale(
+                Q_slow,
+                min_dur=20,
+                smooth_days=tau_sh,
+                antecedent_days=5,
+                precip_threshold=2.0,
+                min_tau=5.0 * tau_sh,
+                mode='within',
+            )
+            self._tau_soil_td = tau_so
+
+        # ---- update _tau_spectral --------------------------------------------
+        n_sp     = len(self._tau_spectral)
+        td_taus  = []
+
+        # Shallow position (fastest)
+        if tau_sh is not None:
+            td_taus.append(tau_sh)
+        elif n_sp >= 1:
+            td_taus.append(float(self._tau_spectral[0]))
+
+        # Soil position (second fastest), only when ≥ 3 reservoirs requested
+        if n_fast_target >= 2:
+            if self._tau_soil_td is not None:
+                td_taus.append(self._tau_soil_td)
+            elif n_sp >= 2:
+                # Accept spectral τ_soil only when it is well-separated from
+                # τ_shallow — if spectral fitting collapsed both to the same
+                # corner (common when seasonal peaks dominate the PSD), discard
+                ref = td_taus[0] if td_taus else None
+                sp_soil = float(self._tau_spectral[1])
+                if ref is not None and sp_soil > 5.0 * ref:
+                    td_taus.append(sp_soil)
+                # else: drop to 2-reservoir initialisation
+
+        if td_taus:
+            self._tau_spectral       = np.sort(np.array(td_taus))  # shortest first
+            self.n_reservoirs_fitted = len(td_taus) + 1            # +1 for karst
+
+    # ------------------------------------------------------------------
+    # Stage 1b: spectral fitting (fallback / diagnostic)
     # ------------------------------------------------------------------
 
     def _compute_psd(self):
@@ -429,29 +690,32 @@ class HydrographSeparation:
 
     def _fit_recession(self):
         """
-        Estimate τ_karst using per-segment minimum-flow analysis, with the
-        long-term absolute-time slope as a fallback.
+        Estimate τ_karst using per-segment minimum-flow analysis, cross-checked
+        against a long-term absolute-time regression on all recession timesteps.
 
         Primary method — per-segment minima:
             For each qualifying recession segment, record the minimum
             Q_residual value and its absolute time position.  The minimum
-            represents the most-depleted karst state within that segment,
-            after the fast reservoirs have substantially drained.  OLS on
-            log(Q_min) vs absolute time gives a slope -1/τ_karst that is
-            robust to multi-year climate trends: each minimum samples a
-            different year but the fitting is dominated by the within-record
-            decline rather than any sustained wet/dry drift.
+            represents the most-depleted state within that segment, after fast
+            reservoirs have substantially drained.  OLS on log(Q_min) vs
+            absolute time gives a slope -1/τ_karst.
 
-        Fallback — long-term slope:
-            If fewer than three qualifying segments exist, fall back to
-            fitting log(Q_residual) vs absolute time across all recession
-            timesteps.  This has more statistical power but is susceptible
-            to multi-year precipitation trends masking or inflating the
-            karst recession signal.
+        Cross-check — long-term slope:
+            Fit log(Q_residual) vs absolute time across all recession timesteps.
+            This averages over more data points and is more robust to soil
+            contamination of the per-segment estimate (unremoved soil components
+            in Q_residual shorten the per-segment estimate because per-segment
+            minima track the seasonal soil cycle rather than the interannual
+            karst trend).
 
-        Both τ estimates are stored (tau_karst and tau_karst_longterm) so
-        the caller can compare them; large disagreement suggests significant
-        interannual climate variability in the record.
+        Reconciliation:
+            When both estimates are available and they disagree by more than
+            factor 2 (|log ratio| > log 2 ≈ 0.69), the LONGER τ is adopted as
+            the final tau_karst.  Physically, soil contamination always biases
+            the per-segment estimate SHORT, so the longer of the two is a
+            better lower-bound on τ_karst.
+
+        Both raw estimates are stored (tau_karst and tau_karst_longterm).
 
         If tau_deep was supplied at construction, skip fitting and use it.
         """
@@ -463,7 +727,7 @@ class HydrographSeparation:
         mask         = self._recession_mask()
         fallback_tau = 10.0 * len(self.Q) * self.dt
 
-        # ---- long-term fallback (always computed for comparison) ----
+        # ---- long-term slope (always computed for comparison) ----
         if np.any(mask):
             idx   = np.where(mask)[0]
             Q_dry = self._Q_residual[idx]
@@ -494,7 +758,6 @@ class HydrographSeparation:
             valid = Q_seg > 0
             if valid.sum() < self.recession_min_duration:
                 continue
-            # Minimum within the segment = deepest karst depletion
             min_pos = np.argmin(Q_seg[valid])
             abs_idx = seg[valid][min_pos]
             t_min_list.append(abs_idx * self.dt)
@@ -508,7 +771,17 @@ class HydrographSeparation:
         logQ_m = np.log(np.array(Q_min_list))
         slope, _, _, _, _ = linregress(t_min, logQ_m)
 
-        self.tau_karst = fallback_tau if slope >= -1e-12 else -1.0 / slope
+        tau_segmin = fallback_tau if slope >= -1e-12 else -1.0 / slope
+
+        # Reconcile: prefer the LONGER estimate when there is strong disagreement.
+        # Per-segment minimum is biased short when Q_residual still contains a
+        # soil component whose seasonal drainage dominates the segment minima.
+        tau_lt = self.tau_karst_longterm
+        if (tau_lt < fallback_tau and
+                abs(np.log(tau_segmin / tau_lt)) > np.log(2.0)):
+            self.tau_karst = max(tau_segmin, tau_lt)
+        else:
+            self.tau_karst = tau_segmin
 
     # ------------------------------------------------------------------
     # Stage 4: initial conditions
@@ -518,6 +791,11 @@ class HydrographSeparation:
         """
         H₀_i = Q_i(t = 0) × τ_i for each reservoir.
         tau and H0 are stored slowest-first (karst, …, shallow).
+
+        When fewer fast reservoirs were estimated than n_reservoirs specifies
+        (e.g., τ_soil not identifiable from recession analysis), the missing
+        intermediate reservoirs are padded with H₀ = 0 and τ = NaN so that
+        get_initial_conditions() returns the expected number of entries.
         """
         H0_karst = float(self._Q_residual[0]) * self.tau_karst
 
@@ -525,9 +803,21 @@ class HydrographSeparation:
                    for Q_c, tau_i in zip(self._Q_components_fast,
                                          self._tau_spectral)]
 
+        # Pad with NaN/0 for any fast reservoirs that could not be estimated
+        n_fast_needed = (self.n_reservoirs - 1 if self.n_reservoirs is not None
+                         else len(self._tau_spectral))
+        n_missing = n_fast_needed - len(H0_fast)
+        if n_missing > 0:
+            # Insert unestimated reservoirs between the fastest and the karst.
+            # tau = NaN signals "unknown"; H0 = 0 is a conservative start.
+            H0_fast = [0.0] * n_missing + H0_fast
+            tau_pad = [float('nan')] * n_missing + list(self._tau_spectral[::-1])
+        else:
+            tau_pad = list(self._tau_spectral[::-1])
+
         # Slowest first
-        self.tau = np.array([self.tau_karst] + list(self._tau_spectral[::-1]))
-        self.H0  = np.array([H0_karst]       + H0_fast[::-1])
+        self.tau = np.array([self.tau_karst] + tau_pad)
+        self.H0  = np.array([H0_karst]       + H0_fast)
 
     # ------------------------------------------------------------------
     # Utility
