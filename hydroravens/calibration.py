@@ -360,7 +360,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   initial_states=None,
                   start=None, end=None, spin_up_cycles=None,
                   metric='KGE', routing_N=2, routing_K=None,
-                  enforce_water_balance=True):
+                  enforce_water_balance='water-year'):
     """
     Run hydroRaVENS and return a CalibResult named tuple.
 
@@ -464,14 +464,14 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         ``'frozen_ground'``, ``'rain_on_snow'``, ``'direct_runoff'``.
         Values: bool.  Overrides the ``modules`` block in the YAML config.
         Absent keys leave the YAML/default value unchanged.
-    enforce_water_balance : bool or 'global', optional
-        True (default): scale ET by a per-water-year multiplier so that
-        P - Q - ET = 0 over each water year.
-        'global': scale ET by a single multiplier computed from sum(P - Q_obs)
-        / sum(ET_raw) over the full record — no per-year overfitting, does not
-        add to k.  Recommended when et_water_stress is off and an honest AIC
-        comparison is needed.
-        False: use raw ET without correction (only appropriate for measured ET).
+    enforce_water_balance : str, optional
+        'water-year' (default): scale ET by a per-water-year multiplier so
+        that P - Q - ET = 0 over each water year.
+        'global': scale ET by a single multiplier computed from
+        sum(P - Q_obs) / sum(ET_raw) over the full record — no per-year
+        overfitting, does not add hidden degrees of freedom to AIC.
+        'none': use raw ET without correction (only for measured ET).
+        Legacy boolean True/'False are silently mapped to 'water-year'/'none'.
         Overrides the enforce_water_balance key in the YAML config.
 
     Returns

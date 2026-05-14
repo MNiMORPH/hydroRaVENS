@@ -470,14 +470,22 @@ class Buckets(object):
             Path to the YAML configuration file. If None, all required
             values must be set on the object directly before calling
             update().
-        enforce_water_balance : bool or None, optional
-            Whether to scale ET by a per-water-year multiplier so that
-            P - Q - ET = 0 over each water year. When None (default), the
-            value is read from ``general: enforce_water_balance`` in the YAML config,
-            which itself defaults to True if absent. Set to False to use
-            raw ET without water-balance correction — appropriate when
-            supplying trusted measured ET (e.g. eddy covariance). Using
-            False with ThorntwaiteChang2019 will raise a warning because
+        enforce_water_balance : str or None, optional
+            How to scale ET to close the water balance. When None (default),
+            the value is read from ``general: enforce_water_balance`` in the
+            YAML config, which itself defaults to ``'water-year'`` if absent.
+            Accepted values:
+
+            ``'water-year'``  Scale ET by a per-water-year multiplier so that
+                P - Q - ET = 0 over each water year.
+            ``'global'``      Scale ET by a single multiplier computed from
+                sum(P - Q_obs) / sum(ET_raw) over the full record. No
+                per-year overfitting; does not add hidden degrees of freedom
+                to AIC comparisons.
+            ``'none'``        Use raw ET without correction. Appropriate only
+                when supplying trusted measured ET (e.g. eddy covariance).
+                Using ``'none'`` with ThorntwaiteChang2019 will raise a
+                warning because
             Thornthwaite ET is known to carry large systematic biases.
         """
         if config_file is None:
@@ -607,9 +615,15 @@ class Buckets(object):
         self.n_spin_up_cycles = self.cfg['general']['spin_up_cycles']
 
         # Resolve enforce_water_balance: keyword argument takes precedence over YAML,
-        # which defaults to True if the key is absent.
+        # which defaults to 'water-year' if the key is absent.
         if enforce_water_balance is None:
-            enforce_water_balance = self.cfg['general'].get('enforce_water_balance', True)
+            enforce_water_balance = self.cfg['general'].get('enforce_water_balance',
+                                                            'water-year')
+        # Normalize legacy boolean values from old YAML configs or API calls.
+        if enforce_water_balance is True:
+            enforce_water_balance = 'water-year'
+        elif enforce_water_balance is False:
+            enforce_water_balance = 'none'
         self.enforce_water_balance = enforce_water_balance
 
         # Fraction of positive daily recharge that bypasses the reservoir
@@ -671,16 +685,16 @@ class Buckets(object):
         self.global_et_multiplier = 1.0   # default; overwritten below if global mode
         if self.enforce_water_balance == 'global':
             self.compute_global_ET_multiplier()
-        elif self.enforce_water_balance:
+        elif self.enforce_water_balance == 'water-year':
             self.compute_ET_multiplier()
         elif self.et_method == 'ThorntwaiteChang2019':
             warnings.warn(
-                "enforce_water_balance=False with ThorntwaiteChang2019: Thornthwaite ET "
+                "enforce_water_balance='none' with ThorntwaiteChang2019: Thornthwaite ET "
                 "will not be rescaled to close the water balance. "
                 "Thornthwaite ET carries large systematic biases; omitting "
                 "the correction is likely to produce significant mass-balance "
-                "errors. Consider enforce_water_balance=True or supplying measured ET via "
-                "evapotranspiration_method: datafile."
+                "errors. Consider enforce_water_balance='water-year' or 'global', "
+                "or supply measured ET via evapotranspiration_method: datafile."
             )
         self.compute_ET()
 
@@ -785,9 +799,11 @@ class Buckets(object):
            The per-water-year water-balance multiplier is bypassed because the
            dynamic stress factor applied in _et_stress_factor() at each time step
            would make the pre-computed per-year correction inconsistent.
-        2. enforce_water_balance=True (default, stress off): raw ET is multiplied
-           by a per-water-year multiplier so that P - Q - ET = 0 each water year.
-        3. enforce_water_balance=False (stress off): raw ET is used directly.
+        2. enforce_water_balance='water-year' (default, stress off): raw ET is
+           multiplied by a per-water-year multiplier so P - Q - ET = 0 each year.
+        3. enforce_water_balance='global' (stress off): raw ET multiplied by a
+           single full-record multiplier from sum(P - Q_obs) / sum(ET_raw).
+        4. enforce_water_balance='none' (stress off): raw ET used directly.
 
         The result is stored as 'ET for model [mm/day]' in self.hydrodata.
         """
@@ -808,7 +824,7 @@ class Buckets(object):
         elif self.enforce_water_balance == 'global':
             self.hydrodata['ET for model [mm/day]'] = (
                 np.asarray(_raw_ET) * self.global_et_multiplier)
-        elif self.enforce_water_balance:
+        elif self.enforce_water_balance == 'water-year':
             # Merge per-water-year multiplier into hydrodata, then apply.
             # Use .to_numpy() to multiply by position rather than pandas index
             # so that any index reset from the merge cannot silently misalign rows.
