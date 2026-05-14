@@ -68,6 +68,7 @@ storage is physically continuous across decade boundaries.
 from collections import namedtuple
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -561,6 +562,16 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
             k += 1  # tau_tile counted once across all tiled reservoirs
 
     if et_scale is not None and b.use_et_water_stress:
+        if et_scale != 1.0 and b.enforce_water_balance != 'none':
+            warnings.warn(
+                f"et_scale={et_scale:.4g} with enforce_water_balance="
+                f"'{b.enforce_water_balance}' and et_water_stress=True: "
+                "the ET multiplier is computed assuming et_scale=1, so a "
+                "non-unity et_scale amplifies that correction and breaks "
+                "the water balance. Set enforce_water_balance='none' when "
+                "calibrating et_scale.",
+                UserWarning, stacklevel=2,
+            )
         b.et_scale = et_scale
         b.compute_ET()   # re-build 'ET for model' column with new scale
         k += 1
