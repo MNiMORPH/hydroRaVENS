@@ -464,12 +464,15 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         ``'frozen_ground'``, ``'rain_on_snow'``, ``'direct_runoff'``.
         Values: bool.  Overrides the ``modules`` block in the YAML config.
         Absent keys leave the YAML/default value unchanged.
-    enforce_water_balance : bool, optional
-        Whether to scale ET by a per-water-year multiplier so that
-        P - Q - ET = 0 over each water year.  Default True.  Set to
-        False only when supplying trusted measured ET that should not
-        be corrected; see Buckets.initialize().  Overrides the
-        enforce_water_balance key in the YAML config.
+    enforce_water_balance : bool or 'global', optional
+        True (default): scale ET by a per-water-year multiplier so that
+        P - Q - ET = 0 over each water year.
+        'global': scale ET by a single multiplier computed from sum(P - Q_obs)
+        / sum(ET_raw) over the full record — no per-year overfitting, does not
+        add to k.  Recommended when et_water_stress is off and an honest AIC
+        comparison is needed.
+        False: use raw ET without correction (only appropriate for measured ET).
+        Overrides the enforce_water_balance key in the YAML config.
 
     Returns
     -------

@@ -667,8 +667,11 @@ class Buckets(object):
         # water-year rollover
         self.compute_water_year()
 
-        # Compute ET, optionally scaling to close the annual water balance.
-        if self.enforce_water_balance:
+        # Compute ET, optionally scaling to close the water balance.
+        self.global_et_multiplier = 1.0   # default; overwritten below if global mode
+        if self.enforce_water_balance == 'global':
+            self.compute_global_ET_multiplier()
+        elif self.enforce_water_balance:
             self.compute_ET_multiplier()
         elif self.et_method == 'ThorntwaiteChang2019':
             warnings.warn(
@@ -703,6 +706,40 @@ class Buckets(object):
                 pd.DatetimeIndex(self.hydrodata['Date']).month
                 >= self.water_year_start_month
             )
+
+    def compute_global_ET_multiplier(self):
+        """
+        Compute a single ET scale factor to close the long-term water balance.
+
+        Computes scale = sum(P - Q_obs) / sum(ET_raw) over all days with
+        observed discharge and stores it as self.global_et_multiplier.
+        Unlike compute_ET_multiplier(), which fits one multiplier per water
+        year, this uses a single ratio for the full record and does not
+        overfit interannual variability. Appropriate when enforce_water_balance
+        is set to 'global'.
+        """
+        if self.et_method == 'datafile':
+            _raw_ET = np.asarray(self.hydrodata['Evapotranspiration [mm/day]'])
+        else:
+            _raw_ET = np.asarray(self.evapotranspiration_Chang2019())
+
+        mask   = self.hydrodata['Specific Discharge [mm/day]'].notna()
+        P_sum  = float(self.hydrodata.loc[mask, 'Precipitation [mm/day]'].sum())
+        Q_sum  = float(self.hydrodata.loc[mask, 'Specific Discharge [mm/day]'].sum())
+        ET_sum = float(_raw_ET[mask].sum())
+
+        if ET_sum <= 0:
+            warnings.warn("Global ET sum is zero or negative; multiplier set to 1.0.",
+                          UserWarning, stacklevel=2)
+            self.global_et_multiplier = 1.0
+        else:
+            self.global_et_multiplier = (P_sum - Q_sum) / ET_sum
+            if self.global_et_multiplier <= 0:
+                warnings.warn(
+                    f"Global ET multiplier = {self.global_et_multiplier:.3f} (≤ 0); "
+                    "P − Q ≤ 0 over the full record. Setting to 1.0.",
+                    UserWarning, stacklevel=2)
+                self.global_et_multiplier = 1.0
 
     def compute_ET_multiplier(self):
         """
@@ -768,6 +805,9 @@ class Buckets(object):
             # Use a single calibrated global scale factor instead.
             self.hydrodata['ET for model [mm/day]'] = (
                 np.asarray(_raw_ET) * self.et_scale)
+        elif self.enforce_water_balance == 'global':
+            self.hydrodata['ET for model [mm/day]'] = (
+                np.asarray(_raw_ET) * self.global_et_multiplier)
         elif self.enforce_water_balance:
             # Merge per-water-year multiplier into hydrodata, then apply.
             # Use .to_numpy() to multiply by position rather than pandas index
