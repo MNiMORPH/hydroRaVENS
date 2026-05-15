@@ -589,8 +589,20 @@ class Buckets(object):
         self.use_rain_on_snow    = _modules.get('rain_on_snow',    True)
         self.use_direct_runoff   = _modules.get('direct_runoff',   False)
         self.use_dtr_fgi_decay   = _modules.get('dtr_fgi_decay',   True)
-        self.use_et_water_stress = _modules.get('et_water_stress', False)
-        self.et_scale = 1.0   # global ET multiplier; calibrated when et_water_stress is on
+        self.use_et_water_stress  = _modules.get('et_water_stress',  False)
+        self.use_et_reservoir_draw = _modules.get('et_reservoir_draw', False)
+        if self.use_et_water_stress and self.use_et_reservoir_draw:
+            warnings.warn(
+                "et_water_stress and et_reservoir_draw are mutually exclusive. "
+                "et_reservoir_draw will be used; et_water_stress ignored.",
+                UserWarning, stacklevel=2,
+            )
+            self.use_et_water_stress = False
+        self.et_scale = 1.0   # global ET multiplier; calibrated when et_water_stress or
+        #                       et_reservoir_draw (with enforce_water_balance='none') is on
+        # Fraction of ET_pot drawn from reservoir 0 (shallow); 1-et_alpha from reservoir 1.
+        # Read from general: et_alpha in config YAML; override via run_and_score(et_alpha=).
+        self.et_alpha = self.cfg['general'].get('et_alpha', 1.0)
 
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
@@ -792,7 +804,7 @@ class Buckets(object):
         Build the ET time series used in the model.
 
         Obtains raw daily ET from the input data file or the Thornthwaite–Chang
-        2019 equation (see evapotranspiration_Chang2019()). Three modes:
+        2019 equation (see evapotranspiration_Chang2019()). Five modes:
 
         1. et_water_stress=True: multiply raw ET by self.et_scale (a single
            global calibration parameter, analogous to PDD_melt_factor for snow).
@@ -804,6 +816,10 @@ class Buckets(object):
         3. enforce_water_balance='global' (stress off): raw ET multiplied by a
            single full-record multiplier from sum(P - Q_obs) / sum(ET_raw).
         4. enforce_water_balance='none' (stress off): raw ET used directly.
+        5. et_reservoir_draw=True + enforce_water_balance='none': same as mode 1
+           (et_scale applied), but ET is drawn from reservoirs after the cascade
+           rather than pre-subtracted from precipitation. With 'global' WB, falls
+           through to mode 3.
 
         The result is stored as 'ET for model [mm/day]' in self.hydrodata.
         """
@@ -815,10 +831,10 @@ class Buckets(object):
             raise ValueError('evapotranspiration_method must be "datafile" or '+
                              '"ThorntwaiteChang2019".')
 
-        if self.use_et_water_stress:
-            # Dynamic stress couples ET to reservoir state at each step;
-            # per-year water-balance enforcement is incompatible with that.
-            # Use a single calibrated global scale factor instead.
+        if self.use_et_water_stress or (self.use_et_reservoir_draw and
+                                         self.enforce_water_balance == 'none'):
+            # et_scale is the sole water-balance closure mechanism in both
+            # et_water_stress mode and et_reservoir_draw without WB enforcement.
             self.hydrodata['ET for model [mm/day]'] = (
                 np.asarray(_raw_ET) * self.et_scale)
         elif self.enforce_water_balance == 'global':
@@ -867,6 +883,29 @@ class Buckets(object):
             return 1.0
         return 1.0 - np.exp(-max(self.reservoirs[0].Hwater, 0.0) / H0)
 
+    def _draw_et_from_reservoirs(self, ET_pot):
+        """
+        Remove actual ET from reservoirs after cascade drainage.
+
+        ET_pot is partitioned between reservoir 0 (shallow) and reservoir 1
+        (soil) by et_alpha.  Each draw is capped at available storage so
+        Hwater never goes negative; unmet demand is implicitly lost as
+        water-stress reduction of actual ET.
+
+        Parameters
+        ----------
+        ET_pot : float
+            Potential ET for this time step [mm/day], already scaled by
+            et_scale or the global water-balance multiplier.
+        """
+        fractions = [self.et_alpha, 1.0 - self.et_alpha]
+        for i, frac in enumerate(fractions):
+            if i >= len(self.reservoirs):
+                break
+            demand = frac * ET_pot
+            actual = min(demand, max(0.0, self.reservoirs[i].Hwater))
+            self.reservoirs[i].Hwater -= actual
+
     def _compute_snowpack(self, time_step):
         """
         Update the snowpack for one timestep; return excess melt energy.
@@ -884,11 +923,14 @@ class Buckets(object):
         T = self.hydrodata['Mean Temperature [C]'][time_step]
         P = self.hydrodata['Precipitation [mm/day]'][time_step]
         self.snowpack.set_temperature(T)
-        self.snowpack.recharge(
-            P - self.hydrodata['ET for model [mm/day]'][time_step]
-            * self._et_stress_factor()
-            + self.H_deficit_carry
-        )
+        if self.use_et_reservoir_draw:
+            _sp_recharge = P + self.H_deficit_carry
+        else:
+            _sp_recharge = (P
+                            - self.hydrodata['ET for model [mm/day]'][time_step]
+                            * self._et_stress_factor()
+                            + self.H_deficit_carry)
+        self.snowpack.recharge(_sp_recharge)
         excess_dd = self.snowpack.melt(self.dt,
                                        P=(P if self.use_rain_on_snow else 0.0))
         self.H_deficit_carry = self.snowpack.H_deficit
@@ -1023,11 +1065,16 @@ class Buckets(object):
                     _recharge = (self.snowpack.H_infiltrated
                                  + self.H_deficit_carry)
                 else:
-                    _recharge = (
-                        self.hydrodata['Precipitation [mm/day]'][time_step] -
-                        self.hydrodata['ET for model [mm/day]'][time_step]
-                        * self._et_stress_factor() +
-                        self.H_deficit_carry)
+                    if self.use_et_reservoir_draw:
+                        _recharge = (
+                            self.hydrodata['Precipitation [mm/day]'][time_step] +
+                            self.H_deficit_carry)
+                    else:
+                        _recharge = (
+                            self.hydrodata['Precipitation [mm/day]'][time_step] -
+                            self.hydrodata['ET for model [mm/day]'][time_step]
+                            * self._et_stress_factor() +
+                            self.H_deficit_carry)
                 # Hortonian-inspired bypass: fraction exits without entering reservoirs.
                 _q_direct = (max(0.0, _recharge) * self.direct_runoff_fraction
                              if self.use_direct_runoff else 0.0)
@@ -1055,6 +1102,10 @@ class Buckets(object):
 
         self.reservoirs[0].f_to_discharge = f0
         self.H_deficit_carry = self.reservoirs[-1].H_deficit
+
+        if self.use_et_reservoir_draw:
+            self._draw_et_from_reservoirs(
+                self.hydrodata['ET for model [mm/day]'][time_step])
 
         self.hydrodata.at[time_step, 'Specific Discharge (modeled) [mm/day]'] = qi
         if self.has_snowpack:

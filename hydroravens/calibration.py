@@ -355,7 +355,7 @@ def _steady_state_depths(reservoirs, mean_q):
 def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   pdm_H0=None, f_tile=None, tau_tile=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
-                  et_scale=None,
+                  et_scale=None, et_alpha=None,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
                   initial_states=None,
@@ -505,12 +505,13 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     # --- Module flag overrides (must precede parameter overrides that depend on them) ---
     if modules is not None:
-        _MATTR = {'snowpack':         'use_snowpack',
-                  'frozen_ground':    'use_frozen_ground',
-                  'rain_on_snow':     'use_rain_on_snow',
-                  'direct_runoff':    'use_direct_runoff',
-                  'dtr_fgi_decay':    'use_dtr_fgi_decay',
-                  'et_water_stress':  'use_et_water_stress'}
+        _MATTR = {'snowpack':          'use_snowpack',
+                  'frozen_ground':     'use_frozen_ground',
+                  'rain_on_snow':      'use_rain_on_snow',
+                  'direct_runoff':     'use_direct_runoff',
+                  'dtr_fgi_decay':     'use_dtr_fgi_decay',
+                  'et_water_stress':   'use_et_water_stress',
+                  'et_reservoir_draw': 'use_et_reservoir_draw'}
         for mod, val in modules.items():
             if mod in _MATTR:
                 setattr(b, _MATTR[mod], val)
@@ -518,10 +519,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
             b.has_snowpack = False
         if not b.use_dtr_fgi_decay:
             b._has_trange = False
-        if b.use_et_water_stress:
-            # Rebuild ET column in the correct mode (global scale, no per-year
-            # multiplier). et_scale is still 1.0 here; it will be overridden
-            # and compute_ET() re-called below if et_scale is provided.
+        if b.use_et_water_stress or b.use_et_reservoir_draw:
+            # Rebuild ET column in the correct mode (global scale or et_scale,
+            # no per-year multiplier). et_scale/et_alpha are still at their
+            # defaults here; they will be overridden below if provided.
             b.compute_ET()
 
     # --- Parameter overrides and free-parameter count ---
@@ -561,11 +562,11 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
         if any_tile:
             k += 1  # tau_tile counted once across all tiled reservoirs
 
-    if et_scale is not None and b.use_et_water_stress:
+    if et_scale is not None and (b.use_et_water_stress or b.use_et_reservoir_draw):
         if et_scale != 1.0 and b.enforce_water_balance != 'none':
             warnings.warn(
                 f"et_scale={et_scale:.4g} with enforce_water_balance="
-                f"'{b.enforce_water_balance}' and et_water_stress=True: "
+                f"'{b.enforce_water_balance}' and dynamic ET active: "
                 "the ET multiplier is computed assuming et_scale=1, so a "
                 "non-unity et_scale amplifies that correction and breaks "
                 "the water balance. Set enforce_water_balance='none' when "
@@ -574,6 +575,10 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
             )
         b.et_scale = et_scale
         b.compute_ET()   # re-build 'ET for model' column with new scale
+        k += 1
+
+    if et_alpha is not None and b.use_et_reservoir_draw:
+        b.et_alpha = et_alpha
         k += 1
 
     if melt_factor is not None and b.has_snowpack:
