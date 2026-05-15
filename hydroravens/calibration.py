@@ -557,7 +557,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                 any_tile = True
             else:
                 b.reservoirs[i].tile_res = None
-        k += sum(1 for ft in f_tile if ft > 0.0)
+        k += len({ft for ft in f_tile if ft > 0.0})  # unique values = independent params
         if any_tile:
             k += 1  # tau_tile counted once across all tiled reservoirs
 
