@@ -16,6 +16,7 @@
 # November 2023
 
 import argparse
+import math
 import sys
 import warnings
 
@@ -603,6 +604,10 @@ class Buckets(object):
         # Fraction of ET_pot drawn from reservoir 0 (shallow); 1-et_alpha from reservoir 1.
         # Read from general: et_alpha in config YAML; override via run_and_score(et_alpha=).
         self.et_alpha = self.cfg['general'].get('et_alpha', 1.0)
+        # Wilting-point threshold for soil reservoir ET draw [mm].
+        # wp_soil_sigma > 0 enables the spatially variable (Gaussian CDF) form.
+        self.wp_soil = 0.0
+        self.wp_soil_sigma = 0.0
 
         # Check if there is a mean temperature column for snowpack.
         # If not, note that no snowpack processes will be included
@@ -908,7 +913,20 @@ class Buckets(object):
             if i >= len(self.reservoirs):
                 break
             demand = frac * ET_pot
-            actual = min(demand, max(0.0, self.reservoirs[i].Hwater))
+            H = self.reservoirs[i].Hwater
+            if i == 1 and self.wp_soil > 0.0:
+                # Soil reservoir: scale demand by fraction of catchment above WP.
+                if self.wp_soil_sigma > 0.0:
+                    # Gaussian CDF: spatially variable WP — σ→0 recovers hard threshold.
+                    f_avail = 0.5 * (1.0 + math.erf((H - self.wp_soil)
+                                                     / (self.wp_soil_sigma * math.sqrt(2.0))))
+                    demand = demand * f_avail
+                else:
+                    # Hard threshold: no ET extraction below wp_soil.
+                    if H <= self.wp_soil:
+                        continue
+                    H = H - self.wp_soil   # only water above WP is available
+            actual = min(demand, max(0.0, H))
             self.reservoirs[i].Hwater -= actual
 
     def _compute_snowpack(self, time_step):

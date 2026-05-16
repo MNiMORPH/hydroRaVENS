@@ -356,6 +356,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   pdm_H0=None, f_tile=None, tau_tile=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
                   et_scale=None, et_alpha=None,
+                  wp_soil=None, wp_soil_sigma=None,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
                   initial_states=None,
@@ -579,6 +580,14 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
 
     if et_alpha is not None and b.use_et_reservoir_draw:
         b.et_alpha = et_alpha
+        k += 1
+
+    if wp_soil is not None and b.use_et_reservoir_draw:
+        b.wp_soil = wp_soil
+        k += 1
+
+    if wp_soil_sigma is not None and b.use_et_reservoir_draw:
+        b.wp_soil_sigma = wp_soil_sigma
         k += 1
 
     if melt_factor is not None and b.has_snowpack:
