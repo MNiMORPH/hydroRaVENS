@@ -842,8 +842,13 @@ class Buckets(object):
                 np.asarray(_raw_ET) * self.global_et_multiplier)
         elif self.enforce_water_balance == 'water-year':
             # Merge per-water-year multiplier into hydrodata, then apply.
+            # Drop any previous 'ET multiplier' column first so that calling
+            # compute_ET() more than once (e.g. after a module flag override)
+            # does not produce duplicate _x/_y suffix columns from pandas merge.
             # Use .to_numpy() to multiply by position rather than pandas index
             # so that any index reset from the merge cannot silently misalign rows.
+            if 'ET multiplier' in self.hydrodata.columns:
+                self.hydrodata = self.hydrodata.drop(columns=['ET multiplier'])
             self.hydrodata = self.hydrodata.merge(
                 self.hydrodata_WY_means['ET multiplier'],
                 on='Water Year')
