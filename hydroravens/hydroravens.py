@@ -123,6 +123,12 @@ class Reservoir(object):
         else:
             self.tile_res = None
 
+        # Power-law recession: Q = (H/τ) * (H/recession_H_ref)^(recession_exponent-1).
+        # recession_exponent=1 (default) recovers the linear reservoir exactly.
+        # recession_H_ref is the storage at which τ has its usual linear meaning [mm].
+        self.recession_exponent = 1.0
+        self.recession_H_ref    = 1.0
+
     def recharge(self, H):
         """
         Add or remove water from the reservoir.
@@ -189,7 +195,19 @@ class Reservoir(object):
         dt : float
             Time step duration (same units as t_efold; typically days).
         """
-        dH = self.Hwater * (1 - np.exp(-dt/self.t_efold))
+        b   = self.recession_exponent
+        H0  = self.Hwater
+        if b == 1.0 or H0 <= 0.0:
+            dH = H0 * (1 - np.exp(-dt / self.t_efold))
+        else:
+            # Exact integration of dH/dt = -(H/τ)·(H/H_ref)^(b-1)
+            #   = -H^b / (τ · H_ref^(b-1))
+            # Substituting u = H^(1-b):  du/dt = (b-1)/τ_eff
+            # => H(t+dt) = [H0^(1-b) + (b-1)·dt/τ_eff]^(1/(1-b))
+            # τ is the e-folding time at H = recession_H_ref; never reaches 0.
+            tau_eff = self.t_efold * self.recession_H_ref ** (b - 1.0)
+            H_new   = (H0 ** (1.0 - b) + (b - 1.0) * dt / tau_eff) ** (1.0 / (1.0 - b))
+            dH      = H0 - max(0.0, H_new)
         self.H_exfiltrated = dH * self.f_to_discharge
         self.H_discharge = self.H_excess + self.H_exfiltrated
         self.H_infiltrated = dH * (1 - self.f_to_discharge)

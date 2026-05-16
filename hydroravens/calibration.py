@@ -357,6 +357,7 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
                   melt_factor=None, fdd_threshold=None, snow_insulation_k=None,
                   et_scale=None, et_alpha=None,
                   wp_soil=None, wp_soil_sigma=None,
+                  recession_exponents=None, recession_exponents_calibrated=0,
                   direct_runoff_fraction=None, baseflow_Q=None,
                   modules=None,
                   initial_states=None,
@@ -589,6 +590,17 @@ def run_and_score(cfg, t_efold=None, f_to_discharge=None, Hmax=None,
     if wp_soil_sigma is not None and b.use_et_reservoir_draw:
         b.wp_soil_sigma = wp_soil_sigma
         k += 1
+
+    if recession_exponents is not None:
+        # H_ref per reservoir: τ is the e-folding time at H = H_ref [mm].
+        # Keeps τ bounds interpretation-stable across different exponent values.
+        _H_REFS = [50.0, 100.0, 1000.0]
+        for i, b_exp in enumerate(recession_exponents):
+            if i >= len(b.reservoirs):
+                break
+            b.reservoirs[i].recession_exponent = float(b_exp)
+            b.reservoirs[i].recession_H_ref    = _H_REFS[i] if i < len(_H_REFS) else 100.0
+        k += recession_exponents_calibrated
 
     if melt_factor is not None and b.has_snowpack:
         b.snowpack.melt_factor = melt_factor
