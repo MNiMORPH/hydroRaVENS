@@ -414,7 +414,8 @@ class Buckets(object):
             self.Chang_a = self._compute_Chang_a(self.Chang_I)
 
         # Frozen ground index (Molnau & Bissell 1983).  Disabled by default
-        # (threshold = inf); set fdd_threshold after initialize() to activate.
+        # (threshold = inf); overridden by snowmelt.fdd_threshold in YAML or
+        # by run_and_score(fdd_threshold=).
         self.fdd_threshold = np.inf  # [°C·day]
         self._fgi          = 0.0    # current frozen ground index [°C·day]
 
@@ -554,6 +555,8 @@ class Buckets(object):
                                                [0.0]   * self.n_reservoirs)
         _tau_tile = self.cfg['reservoirs'].get('tile_residence_times__days',
                                                [None]  * self.n_reservoirs)
+        _recession_exp = self.cfg['reservoirs'].get('recession_exponents',
+                                                   [1.0] * self.n_reservoirs)
         self.reservoirs = [
             Reservoir(
                 t_efold        = self.cfg['reservoirs']['e_folding_residence_times__days'][i],
@@ -565,6 +568,8 @@ class Buckets(object):
                 tau_tile       = _tau_tile[i],
             )
             for i in range(self.n_reservoirs)]
+        for i, b_exp in enumerate(_recession_exp):
+            self.reservoirs[i].recession_exponent = float(b_exp)
 
         # Check if bottom reservoir discharges all to river: conserve mass.
         # But allow through with a warning in case the user wants a
@@ -578,6 +583,7 @@ class Buckets(object):
         self.melt_factor         = self.cfg['snowmelt']['PDD_melt_factor']
         self.snow_insulation_k   = self.cfg['snowmelt'].get('snow_insulation_k',   0.0)
         self.fgi_decay_coeff     = self.cfg['snowmelt'].get('fgi_decay_coeff',     0.97)
+        self.fdd_threshold       = self.cfg['snowmelt'].get('fdd_threshold',       np.inf)
         self.et_method = self.cfg['catchment']['evapotranspiration_method']
         if self.et_method == 'ThorntwaiteChang2019' and not hasattr(self, 'Chang_I'):
             n_years = len(self.hydrodata) / 365.25
