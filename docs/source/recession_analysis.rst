@@ -70,6 +70,45 @@ Brutsaert–Nieber Analysis
    :members: fit, to_reservoir_exponent, summary, plot
    :member-order: bysource
 
+Using Results in HydroRaVENS
+-----------------------------
+
+The B–N analysis produces a single catchment-integrated exponent *b*.
+In a multi-reservoir HydroRaVENS model, the reservoirs have different
+physical roles and the exponent should be assigned accordingly:
+
+.. list-table::
+   :widths: 20 20 60
+   :header-rows: 1
+
+   * - Reservoir
+     - Suggested *b*
+     - Rationale
+   * - Soil (fastest)
+     - B–N estimate
+     - The full recession cloud is dominated by the soil/fast response.
+       Use as a calibration starting point; typical calibrated values
+       are *b* ≈ 3–4 for agricultural catchments.
+   * - Karst (intermediate)
+     - 2.203 (fixed)
+     - The theoretical Brutsaert & Nieber (1977) long-time baseflow
+       value. The data rarely constrain this independently; fix it
+       rather than calibrate.
+   * - Deep (slowest)
+     - 1.0 (fixed)
+     - Near-infinite residence time; the linear approximation is
+       adequate and avoids adding a free parameter.
+
+The B–N slope *n* from the **lower envelope** of the cloud corresponds
+to long-duration, groundwater-dominated recessions and is the most
+physically meaningful region for setting the slow-reservoir exponent.
+The upper scatter reflects short, event-driven recessions (tile drains,
+surface runoff) and should not be used to set the baseflow exponent.
+
+For a complete prior-estimation workflow that combines the B–N analysis
+with timescale estimation, see :func:`~hydroravens.suggest_priors` and
+the :doc:`tutorial`.
+
 Workflow
 --------
 

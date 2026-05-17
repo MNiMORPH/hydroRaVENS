@@ -31,6 +31,7 @@ and educational applications.
 
    installation
    quickstart
+   tutorial
 
 .. toctree::
    :maxdepth: 2
@@ -46,6 +47,7 @@ and educational applications.
    api
    calibration
    recession_analysis
+   priors
    references
 
 Quick Example
