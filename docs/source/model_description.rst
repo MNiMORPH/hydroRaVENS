@@ -346,6 +346,99 @@ where:
   groundwater (years) — but that mapping is the user's choice, analogous
   to the multi-component runoff structure of HBV (Bergström 1976).
 
+Nonlinear (Power-Law) Recession (Optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each reservoir can optionally use a power-law storage–discharge relationship
+in place of the default linear (exponential) decay. The discharge rate scales
+as a power of storage:
+
+.. math::
+
+    Q_i = \frac{H_i}{\tau_i} \left(\frac{H_i}{H_{\text{ref}}}\right)^{b_i - 1}
+
+where :math:`b_i \geq 1` is the recession exponent for reservoir :math:`i`
+and :math:`H_{\text{ref}}` is a reference storage depth at which :math:`\tau_i`
+retains its standard linear meaning. Setting :math:`b_i = 1` recovers the
+linear reservoir exactly.
+
+For :math:`b > 1`, the relationship is superlinear: high-storage states drain
+faster than the linear equivalent, and as storage depletes the drainage rate
+slows more rapidly. This behaviour is observed in natural catchments and has
+theoretical grounding in subsurface flow geometry (Brutsaert & Nieber 1977;
+Kirchner 2009). Brutsaert & Nieber (1977) derived :math:`b \approx 2.2` from
+analysis of recession hydrographs; individual catchments and reservoirs may
+deviate substantially from this value.
+
+.. note::
+
+    In calibration against streamflow, the recession exponent of the deepest
+    calibrated reservoir (typically the karst or bedrock zone) tends to be
+    poorly constrained and may drift toward high values that mimic
+    threshold-like behavior (see below). Fixing deep-reservoir exponents at
+    the theoretical Brutsaert-Nieber value (:math:`b = 2.2`) is recommended
+    unless independent evidence supports a different value.
+
+Saturation-Excess Runoff (PDM, Optional)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The probability-distributed model (PDM; Moore 1985) represents spatial
+variability in soil storage capacity within a reservoir. Storage capacities
+are assumed to follow an exponential distribution with mean :math:`H_0`
+(``pdm_H0``). When the reservoir storage :math:`H` is positive, the
+fraction of the area already saturated is:
+
+.. math::
+
+    f_{\text{sat}} = 1 - e^{-H / H_0}
+
+That fraction of each day's positive recharge runs off immediately as
+saturation-excess overland flow; the remainder enters the reservoir normally.
+Setting a very large :math:`H_0` renders the PDM effectively inactive.
+
+.. note::
+
+    **PDM and power-law recession are equifinal.** Both produce nonlinear
+    storage–discharge behaviour, but through different mechanisms: the PDM
+    uses a sharp storage threshold (saturation-excess), while power-law
+    recession is a smooth, continuous relationship. When both are active and
+    calibrated simultaneously against streamflow alone, the optimizer can trade
+    one against the other without penalty, obscuring the physical meaning of
+    each parameter.
+
+    Calibration experience on the Cannon River (Wickert 2026) shows that when
+    the recession exponent :math:`b` is free, the PDM characteristic depth
+    :math:`H_0` is driven to large values (effectively inactive), and vice
+    versa: when PDM is removed, :math:`b` rises to compensate. The two
+    mechanisms are redundant for the purpose of matching a streamflow record.
+
+    **Recommended practice:** use one or the other, not both.
+
+    * Power-law recession (:math:`b > 1`) is preferred when the goal is a
+      smooth, theoretically grounded nonlinearity. It has a direct connection
+      to subsurface flow theory (Brutsaert & Nieber 1977; Kirchner 2009) and
+      avoids the threshold artifact.
+    * PDM is preferred when independent evidence (saturation mapping, soil
+      moisture observations) supports a genuine threshold process.
+
+**On shallow reservoirs, tile drains, and macropore flow:**
+  The same equifinality argument extends to structural choices about reservoir
+  count and fast-pathway modules. A shallow reservoir with a short timescale,
+  a tile-drain bypass, or a macropore fraction all represent fast, near-surface
+  runoff generation. If the soil-zone recession exponent is calibrated and found
+  to be robustly high (:math:`b \approx 3`–:math:`4`), the soil reservoir is
+  already capturing this fast-response behavior through its nonlinear
+  storage–discharge relationship. Adding a separate shallow reservoir, tile, or
+  macropore pathway then produces similar discharge dynamics with additional
+  parameters, potentially leading to false conclusions because the parameter
+  names imply distinct physical mechanisms that the data cannot distinguish.
+
+  Unless there is independent process evidence (tile-drain monitoring, tracer
+  data, direct macropore observations) that requires a mechanistically separate
+  fast pathway, prefer calibrating :math:`b_{\text{soil}}` and accepting the
+  result as an effective representation of the aggregate fast-response behavior
+  of the soil zone.
+
 Evapotranspiration
 ~~~~~~~~~~~~~~~~~~
 
@@ -442,7 +535,9 @@ Model Assumptions & Limitations
 **Limitations:**
 
 * ⚠️ Lumped model (no spatial variability)
-* ⚠️ Linear reservoirs (may not capture threshold behavior)
+* ⚠️ Lumped nonlinearity — power-law recession and PDM both approximate
+  threshold behavior but cannot distinguish the underlying mechanism
+  (macropores, tile drains, saturation-excess) from streamflow alone
 * ⚠️ Daily timestep by design — degree-day snowmelt, Thornthwaite ET, and
   linear reservoir drainage are daily-scale parameterisations that lose
   physical meaning at finer resolution
