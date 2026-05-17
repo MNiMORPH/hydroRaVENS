@@ -148,21 +148,51 @@ The ``general`` section
        longest reservoir e-folding time. Because initial conditions are set
        to analytical steady-state depths, one e-folding time is sufficient
        to resolve seasonal and inter-annual climate memory.
+   * - ``et_alpha``
+     - float
+     - Fraction (0–1) of potential ET drawn from the top (soil) reservoir
+       when ``et_reservoir_draw: true``. The remainder ``1 − et_alpha`` is
+       drawn from the second reservoir. Default ``1.0`` (all ET from top
+       reservoir). Has no effect when ``et_reservoir_draw: false``. See
+       :ref:`et-modules`.
+   * - ``direct_runoff_fraction``
+     - float
+     - Fast-bypass fraction (0–1) of positive daily recharge that exits
+       directly as runoff, bypassing the reservoir cascade. Active only
+       when ``direct_runoff: true`` in the ``modules`` block. Default
+       ``0.0`` (disabled). Also settable as a calibration parameter via
+       :func:`~hydroravens.calibration.run_and_score`.
    * - ``enforce_water_balance``
-     - bool
-     - Scale ET by a per-water-year multiplier so that P − Q − ET = 0 over
-       each water year. Default ``true``. Set to ``false`` only when
-       supplying trusted measured ET (e.g. eddy covariance) that should not
-       be corrected. Using ``false`` with ``ThorntwaiteChang2019`` will raise
-       a warning because Thornthwaite ET carries large systematic biases.
+     - string
+     - Controls how ET is scaled to close the water balance.
+       Default ``'water-year'`` if the key is absent. Accepted values:
+
+       ``'water-year'`` — scale ET by a per-water-year multiplier so that
+       P − Q − ET = 0 over each water year.
+
+       ``'global'`` — scale ET by a single multiplier computed from the full
+       record (sum(P − Q) / sum(ET_raw)). No per-year overfitting; does not
+       add hidden degrees of freedom to AIC comparisons. Recommended when
+       calibrating with a long record and comparing models by AIC.
+
+       ``'none'`` — use raw ET without any correction. Appropriate only when
+       supplying trusted measured ET (e.g. eddy covariance). Using ``'none'``
+       with ``ThorntwaiteChang2019`` raises a warning because Thornthwaite ET
+       carries large systematic biases. Also appropriate when ``et_scale`` is
+       a free calibration parameter (see :ref:`et-modules`).
+
+       Legacy boolean values are accepted: ``true`` maps to ``'water-year'``
+       and ``false`` maps to ``'none'``.
 
 Example:
 
 .. code-block:: yaml
 
     general:
-        spin_up_cycles: 2  # Run through data twice to initialize
-        enforce_water_balance: true     # default; omit to accept the default
+        spin_up_cycles: 2                  # Run through data twice to initialize
+        enforce_water_balance: water-year  # default; omit to accept the default
+        et_alpha: 1.0                      # fraction of ET from top reservoir (et_reservoir_draw only)
+        direct_runoff_fraction: 0.0        # fast-bypass fraction (direct_runoff module only)
 
 The ``reservoirs`` section
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -186,6 +216,38 @@ All lists must have the same length.
    * - ``maximum_effective_depths__mm``
      - list of floats
      - Storage capacity (mm) per reservoir; use ``.inf`` for unlimited
+   * - ``pdm_H0__mm``
+     - list of floats or ``null``
+     - PDM characteristic depth (mm) per reservoir. When set for a
+       reservoir, a fraction :math:`f_\text{sat} = 1 - e^{-H / H_0}` of
+       incoming recharge becomes saturation-excess runoff. ``null`` (or
+       omitting the entry) disables PDM for that reservoir. Default: all
+       ``null`` (PDM off). Mutually exclusive with a finite
+       ``maximum_effective_depths__mm`` entry for the same reservoir.
+   * - ``tile_fractions``
+     - list of floats
+     - Fraction (0–1) of infiltrating water diverted to a fast tile-drain
+       sub-reservoir, per main reservoir. Default: all ``0.0`` (no tile
+       drainage). When non-zero, the corresponding
+       ``tile_residence_times__days`` entry must also be set.
+   * - ``tile_residence_times__days``
+     - list of floats or ``null``
+     - E-folding residence time (days) of the tile-drain sub-reservoir per
+       main reservoir. Required when the corresponding ``tile_fractions``
+       entry is greater than zero; ignored otherwise. Default: all ``null``.
+   * - ``recession_exponents``
+     - list of floats
+     - Power-law recession exponent :math:`b` per reservoir. :math:`b = 1`
+       recovers the standard linear reservoir; :math:`b > 1` produces
+       concave recession limbs consistent with subsurface flow theory
+       (Brutsaert & Nieber 1977; Kirchner 2009). The theoretical value
+       for catchment-integrated baseflow recession is :math:`b \approx 2.2`
+       (Brutsaert & Nieber 1977); calibrated soil-zone values are typically
+       larger (:math:`b \approx 3`–5). Default: all ``1.0`` (linear).
+       Also overridable per calibration run via
+       :func:`~hydroravens.calibration.run_and_score`. See
+       :doc:`model_description` for theory and :doc:`recession_analysis`
+       for estimating *b* from observed streamflow.
 
 Example:
 
@@ -240,6 +302,19 @@ the input CSV, but the ``PDD_melt_factor`` key must be present regardless.
        :math:`A_0`. This makes FGI accumulation persistent in continental
        climates and decay-bounded in maritime ones. Without T_min/T_max,
        falls back to constant :math:`A_0` (original M&B behaviour).
+   * - ``fdd_threshold``
+     - float
+     - Frozen ground index (FGI) threshold (°C·day) above which the top
+       reservoir's lateral drainage is blocked and all water exits as
+       direct runoff (Molnau & Bissell 1983). The FGI accumulates freezing
+       degree-days and decays during thaw; when it exceeds this threshold
+       the soil is considered frozen. Default ``inf`` (frozen ground never
+       triggers). Requires ``frozen_ground: true`` in the ``modules``
+       block and temperature data. Typically calibrated; literature values
+       for agricultural soils range from ~50–200 °C·day. Also overridable
+       via :func:`~hydroravens.calibration.run_and_score`. **Do not
+       calibrate simultaneously with** ``snow_insulation_k`` — see
+       :doc:`model_description`.
    * - ``snow_insulation_k``
      - float
      - Snow insulation decay constant (mm⁻¹ SWE). Scales effective air
@@ -259,14 +334,14 @@ Example:
 
     snowmelt:
         PDD_melt_factor: 1.0     # 1 mm SWE melts per °C per day
+        fdd_threshold: 83.0      # °C·day; calibrate or fix from soil data
         snow_insulation_k: 0.057 # LISFLOOD default; set 0.0 to disable
 
 The ``modules`` section
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Optional process modules can be enabled or disabled through the ``modules``
-block. All four keys default to the values shown below if the block is
-absent.
+block. All keys default to the values shown below if the block is absent.
 
 .. list-table::
    :widths: 25 10 10 45
@@ -313,21 +388,93 @@ absent.
        revert to constant :math:`A_0` (original Molnau & Bissell
        1983 behaviour). Has no effect when T_min/T_max columns are
        absent or when ``frozen_ground: false``.
+   * - ``et_water_stress``
+     - bool
+     - ``false``
+     - Soil-moisture-dependent ET. Actual ET is multiplied by
+       :math:`1 - e^{-H_0 / H_{\text{pdm}}}`, where :math:`H_0` is
+       the current storage in the top reservoir and
+       :math:`H_{\text{pdm}}` is its PDM characteristic depth
+       (``pdm_H0__mm``). ET approaches potential ET as the reservoir
+       fills and drops to zero as it empties. Mutually exclusive with
+       ``et_reservoir_draw``; if both are set, ``et_reservoir_draw``
+       takes precedence.
+   * - ``et_reservoir_draw``
+     - bool
+     - ``false``
+     - Post-cascade reservoir ET extraction. Instead of subtracting
+       ET from precipitation before it enters the reservoir cascade,
+       ET is drawn directly from reservoir storage after drainage.
+       Partitioned between the top two reservoirs by ``et_alpha``
+       (see :ref:`et-modules`). Supports a wilting-point threshold
+       (``wp_soil``, ``wp_soil_sigma``) below which soil-reservoir ET
+       extraction is reduced or blocked. Mutually exclusive with
+       ``et_water_stress``.
 
 Example:
 
 .. code-block:: yaml
 
     modules:
-        snowpack:      true
-        frozen_ground: true
-        rain_on_snow:  true
-        direct_runoff: false   # off by default
-        dtr_fgi_decay: true    # on by default; disable for continental climates with A=1
+        snowpack:          true
+        frozen_ground:     true
+        rain_on_snow:      true
+        direct_runoff:     false   # off by default
+        dtr_fgi_decay:     true    # on by default; disable for continental climates with A=1
+        et_water_stress:   false   # off by default; enable for soil-moisture-limited ET
+        et_reservoir_draw: false   # off by default; enable for post-cascade reservoir ET
 
 When a module is disabled, its associated parameter (e.g.
 ``PDD_melt_factor`` when ``snowpack: false``) has no effect and need not
 be calibrated.
+
+.. _et-modules:
+
+ET Module Parameters
+~~~~~~~~~~~~~~~~~~~~
+
+The parameters below are calibration parameters associated with the ET
+modules. They are passed to :func:`~hydroravens.calibration.run_and_score`
+rather than read directly from the YAML file (except ``et_alpha``, which
+may also be set in the ``general`` block).
+
+.. list-table::
+   :widths: 25 15 50
+   :header-rows: 1
+
+   * - Parameter
+     - Type
+     - Description
+   * - ``et_scale``
+     - float
+     - Global ET multiplier. Scales potential ET up or down uniformly
+       across the entire record. Active (calibrated) only when
+       ``et_water_stress: true`` or ``et_reservoir_draw: true`` *and*
+       ``enforce_water_balance: 'none'`` in the driver. Incompatible with
+       ``'water-year'`` or ``'global'`` water-balance enforcement (those
+       modes compute their own multiplier). Default ``1.0``.
+   * - ``et_alpha``
+     - float
+     - Fraction (0–1) of potential ET extracted from the top (soil)
+       reservoir; ``1 − et_alpha`` is extracted from the second reservoir.
+       Active only when ``et_reservoir_draw: true``. Default ``1.0``.
+       May also be set as ``et_alpha`` in the ``general`` YAML block.
+   * - ``wp_soil``
+     - float
+     - Wilting-point threshold (mm water depth) for the soil reservoir
+       when ``et_reservoir_draw: true``. ET extraction from the soil
+       reservoir is reduced or blocked when storage falls below this
+       value. Default ``0.0`` (no wilting point). When ``wp_soil_sigma``
+       is also set, a smooth Gaussian-CDF transition replaces the hard
+       threshold.
+   * - ``wp_soil_sigma``
+     - float
+     - Standard deviation (mm) of the spatially distributed wilting-point
+       threshold. When ``> 0``, the fraction of the catchment below
+       wilting point is modeled as a Gaussian CDF centered on ``wp_soil``
+       with standard deviation ``wp_soil_sigma``, and ET extraction is
+       reduced proportionally. Default ``0.0`` (hard threshold). Requires
+       ``wp_soil > 0``.
 
 Complete Example
 ~~~~~~~~~~~~~~~~
@@ -358,14 +505,17 @@ Complete Example
     snowmelt:
         PDD_melt_factor: 1.0
         fgi_decay_coeff: 0.97       # default; Molnau & Bissell (1983)
+        fdd_threshold: .inf         # °C·day; .inf = frozen ground never triggers
         snow_insulation_k: 0.0      # mm⁻¹ SWE; 0 = disabled
 
     modules:
-        snowpack:      true
-        frozen_ground: true
-        rain_on_snow:  true
-        direct_runoff: false
-        dtr_fgi_decay: true
+        snowpack:          true
+        frozen_ground:     true
+        rain_on_snow:      true
+        direct_runoff:     false
+        dtr_fgi_decay:     true
+        et_water_stress:   false   # soil-moisture-dependent ET
+        et_reservoir_draw: false   # post-cascade reservoir ET extraction
 
 Illustrative Starting Points
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
