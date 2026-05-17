@@ -45,6 +45,7 @@ and educational applications.
 
    api
    calibration
+   recession_analysis
    references
 
 Quick Example
